@@ -22,7 +22,7 @@ function refreshUI() {
       // Send message to content script to analyze current page
       chrome.tabs.sendMessage(tabs[0].id, {action: "analyze"}, function(response) {
         if (response && response.success) {
-          updateUI(response.botScore, response.misinfoScore);
+          updateUI(response.botScore, response.misinfoScore, response.postingFrequencyScore, response.detectedPatterns);
         } else {
           showError();
         }
@@ -74,7 +74,7 @@ function setupTabs() {
 }
 
 // Update UI with scores
-function updateUI(botScore, misinfoScore) {
+function updateUI(botScore, misinfoScore, postingFrequencyScore, detectedPatterns) {
   // Update bot likelihood
   botLikelihoodBar.style.width = botScore + '%';
   botLikelihoodValue.textContent = botScore + '% likelihood of bot activity';
@@ -101,6 +101,48 @@ function updateUI(botScore, misinfoScore) {
     misinfoLikelihoodBar.className = 'progress bot-high';
   }
   
+  // Add posting frequency info if the element exists
+  const postingFrequencyBar = document.getElementById('posting-frequency');
+  const postingFrequencyValue = document.getElementById('posting-frequency-value');
+  
+  if (postingFrequencyBar && postingFrequencyValue) {
+    postingFrequencyBar.style.width = postingFrequencyScore + '%';
+    postingFrequencyValue.textContent = postingFrequencyScore + '% suspicious posting patterns';
+    
+    // Set color based on risk level
+    if (postingFrequencyScore < 30) {
+      postingFrequencyBar.className = 'progress bot-low';
+    } else if (postingFrequencyScore < 70) {
+      postingFrequencyBar.className = 'progress bot-medium';
+    } else {
+      postingFrequencyBar.className = 'progress bot-high';
+    }
+  }
+  
+  // Display detected patterns if element exists
+  const patternsContainer = document.getElementById('detected-patterns');
+  if (patternsContainer && detectedPatterns && detectedPatterns.length > 0) {
+    patternsContainer.innerHTML = '';
+    patternsContainer.style.display = 'block';
+    
+    const patternTitle = document.createElement('h4');
+    patternTitle.textContent = 'Detected Patterns:';
+    patternsContainer.appendChild(patternTitle);
+    
+    const patternList = document.createElement('ul');
+    patternList.className = 'pattern-list';
+    
+    detectedPatterns.forEach(pattern => {
+      const item = document.createElement('li');
+      item.textContent = pattern;
+      patternList.appendChild(item);
+    });
+    
+    patternsContainer.appendChild(patternList);
+  } else if (patternsContainer) {
+    patternsContainer.style.display = 'none';
+  }
+  
   // Show/hide action buttons
   reportButton.disabled = false;
   shareButton.disabled = false;
@@ -110,6 +152,17 @@ function updateUI(botScore, misinfoScore) {
 function showError() {
   botLikelihoodValue.textContent = 'Error analyzing content';
   misinfoLikelihoodValue.textContent = 'Error analyzing content';
+  
+  const postingFrequencyValue = document.getElementById('posting-frequency-value');
+  if (postingFrequencyValue) {
+    postingFrequencyValue.textContent = 'Error analyzing content';
+  }
+  
+  const patternsContainer = document.getElementById('detected-patterns');
+  if (patternsContainer) {
+    patternsContainer.style.display = 'none';
+  }
+  
   reportButton.disabled = true;
   shareButton.disabled = true;
 }
@@ -118,6 +171,17 @@ function showError() {
 function showNotSupported() {
   botLikelihoodValue.textContent = 'Not a supported platform';
   misinfoLikelihoodValue.textContent = 'Visit Twitter/X to use OctoPal';
+  
+  const postingFrequencyValue = document.getElementById('posting-frequency-value');
+  if (postingFrequencyValue) {
+    postingFrequencyValue.textContent = 'Not a supported platform';
+  }
+  
+  const patternsContainer = document.getElementById('detected-patterns');
+  if (patternsContainer) {
+    patternsContainer.style.display = 'none';
+  }
+  
   reportButton.disabled = true;
   shareButton.disabled = true;
 }
@@ -164,7 +228,16 @@ function shareAnalysis() {
       const botScore = botLikelihoodBar.style.width.replace('%', '');
       const misinfoScore = misinfoLikelihoodBar.style.width.replace('%', '');
       
-      const shareText = `I found content with ${botScore}% bot likelihood and ${misinfoScore}% misinformation likelihood using OctoPal! Check it out: ${tabs[0].url}`;
+      // Add posting frequency score if available
+      let shareText = `I found content with ${botScore}% bot likelihood and ${misinfoScore}% misinformation likelihood`;
+      
+      const postingFrequencyBar = document.getElementById('posting-frequency');
+      if (postingFrequencyBar) {
+        const postingFrequencyScore = postingFrequencyBar.style.width.replace('%', '');
+        shareText += ` and ${postingFrequencyScore}% suspicious posting patterns`;
+      }
+      
+      shareText += ` using OctoPal! Check it out: ${tabs[0].url}`;
       
       // Open a new tab with the share text ready to tweet
       const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;

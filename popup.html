@@ -183,6 +183,31 @@
       display: none;
       padding: 10px 0;
     }
+    
+    .pattern-list {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 13px;
+    }
+    
+    .pattern-list li {
+      margin-bottom: 4px;
+    }
+    
+    #detected-patterns {
+      margin-top: 15px;
+      padding: 10px;
+      background-color: #f8f8f8;
+      border-radius: 6px;
+      display: none;
+    }
+    
+    #detected-patterns h4 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      color: #0b55e8;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
@@ -228,6 +253,20 @@
         <div id="misinfo-points"></div>
       </div>
     </div>
+    
+    <div class="stats">
+      <h3><span class="icon">⏱️</span> Posting Frequency</h3>
+      <div class="progress-bar">
+        <div id="posting-frequency" class="progress" style="width: 0%"></div>
+      </div>
+      <div class="result-details">
+        <div id="posting-frequency-value">Analyzing...</div>
+        <div id="frequency-points"></div>
+      </div>
+    </div>
+    
+    <!-- Detected Patterns Container -->
+    <div id="detected-patterns"></div>
     
     <div class="rewards" id="rewards-box">
       <h4>🎉 Great job spotting this content!</h4>
