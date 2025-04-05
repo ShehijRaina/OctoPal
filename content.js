@@ -1,5 +1,5 @@
-// BotSpotter content script
-console.log('BotSpotter: Content script loaded');
+// OctoPal content script
+console.log('OctoPal: Content script loaded');
 
 // Listen for messages from the popup
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
@@ -13,7 +13,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         misinfoScore: results.misinfoScore
       });
     }).catch(error => {
-      console.error('BotSpotter: Error analyzing page', error);
+      console.error('OctoPal: Error analyzing page', error);
       sendResponse({success: false});
     });
     

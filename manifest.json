@@ -1,10 +1,20 @@
 {
   "manifest_version": 3,
-  "name": "BotSpotter",
+  "name": "OctoPal",
   "version": "0.1.0",
   "description": "Identify bots and misinformation on social media",
+  "icons": {
+    "16": "images/octopal-logo.png",
+    "48": "images/octopal-logo.png",
+    "128": "images/octopal-logo.png"
+  },
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "images/octopal-logo.png",
+      "48": "images/octopal-logo.png",
+      "128": "images/octopal-logo.png"
+    }
   },
   "permissions": [
     "storage",

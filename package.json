@@ -1,5 +1,5 @@
 {
-  "name": "botspotter",
+  "name": "octopal",
   "version": "0.1.0",
   "description": "Browser extension to identify bots and misinformation on social media",
   "main": "background.js",

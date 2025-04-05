@@ -1,5 +1,5 @@
-// BotSpotter background script
-console.log('BotSpotter: Background script loaded');
+// OctoPal background script
+console.log('OctoPal: Background script loaded');
 
 // Initialize user data on installation
 chrome.runtime.onInstalled.addListener(function() {
@@ -11,7 +11,7 @@ chrome.runtime.onInstalled.addListener(function() {
     }
   });
   
-  console.log('BotSpotter: Extension installed');
+  console.log('OctoPal: Extension installed');
 });
 
 // Listen for messages from popup or content script
@@ -63,7 +63,7 @@ async function handleReport(request, sendResponse) {
       });
     });
   } catch (error) {
-    console.error('BotSpotter: Error handling report', error);
+    console.error('OctoPal: Error handling report', error);
     sendResponse({ success: false });
   }
 } 

@@ -1,4 +1,4 @@
-# BotSpotter 🤖
+# OctoPal 🤖
 
 A simple browser extension that helps identify potential bots and misinformation on Twitter/X.
 
@@ -45,7 +45,7 @@ This is a basic browser extension with no build process required.
 ## Usage
 
 1. Visit Twitter/X
-2. Click the BotSpotter icon in your browser toolbar
+2. Click the OctoPal icon in your browser toolbar
 3. View the analysis of the current page
 4. If you find content you suspect is bot-generated or misinformation, click "Report"
 

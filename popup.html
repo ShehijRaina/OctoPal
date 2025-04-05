@@ -1,85 +1,262 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>BotSpotter</title>
+  <title>OctoPal</title>
   <meta charset="UTF-8">
   <style>
     body {
-      width: 300px;
-      padding: 10px;
-      font-family: Arial, sans-serif;
+      width: 350px;
+      padding: 15px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f8f9fa;
+      color: #333;
+      margin: 0;
     }
+    
+    .header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+      border-bottom: 2px solid #e6e6e6;
+      padding-bottom: 10px;
+    }
+    
+    .logo {
+      width: 40px;
+      height: 40px;
+      margin-right: 10px;
+    }
+    
     h1 {
-      color: #4e54c8;
+      color: #0b55e8;
+      font-size: 22px;
+      margin: 0;
+    }
+    
+    .user-stats {
+      display: flex;
+      justify-content: space-between;
+      background: linear-gradient(135deg, #0b55e8, #4a7dec);
+      color: white;
+      padding: 10px;
+      border-radius: 10px;
+      margin-bottom: 15px;
+    }
+    
+    .stat-box {
       text-align: center;
     }
+    
+    .stat-value {
+      font-size: 18px;
+      font-weight: bold;
+    }
+    
+    .stat-label {
+      font-size: 12px;
+      opacity: 0.9;
+    }
+    
     .content {
       margin: 15px 0;
     }
+    
     .stats {
-      margin-bottom: 10px;
-      padding: 10px;
-      background: #f5f7fa;
-      border-radius: 8px;
+      margin-bottom: 15px;
+      padding: 15px;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
     }
+    
+    .stats h3 {
+      margin-top: 0;
+      display: flex;
+      align-items: center;
+      color: #0b55e8;
+    }
+    
+    .icon {
+      margin-right: 8px;
+    }
+    
     .progress-bar {
-      height: 10px;
+      height: 12px;
       background-color: #e0e0e0;
-      border-radius: 5px;
-      margin: 5px 0;
+      border-radius: 6px;
+      margin: 10px 0;
+      overflow: hidden;
     }
+    
     .progress {
       height: 100%;
-      background-color: #4e54c8;
-      border-radius: 5px;
-      transition: width 0.3s;
+      background-color: #0b55e8;
+      border-radius: 6px;
+      transition: width 0.5s ease-out;
     }
+    
     .bot-high {
-      background-color: #ff6b6b;
+      background: linear-gradient(90deg, #ff6b6b, #ff3838);
     }
+    
     .bot-medium {
-      background-color: #ffd166;
+      background: linear-gradient(90deg, #ffd166, #ffb347);
     }
+    
     .bot-low {
-      background-color: #5cdb95;
+      background: linear-gradient(90deg, #5cdb95, #3bb878);
     }
+    
+    .result-details {
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+    }
+    
+    .action-row {
+      display: flex;
+      gap: 10px;
+    }
+    
     button {
-      background-color: #4e54c8;
+      background-color: #0b55e8;
       color: white;
       border: none;
-      padding: 8px 12px;
-      border-radius: 4px;
+      padding: 10px;
+      border-radius: 6px;
       cursor: pointer;
       font-weight: bold;
-      width: 100%;
-      margin-top: 10px;
+      flex: 1;
     }
+    
     button:hover {
-      background-color: #8f94fb;
+      background-color: #2e6ef0;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      transition: all 0.2s;
+    }
+    
+    button:active {
+      transform: translateY(0);
+    }
+    
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-left: 10px;
+    }
+    
+    .rewards {
+      position: relative;
+      margin-top: 15px;
+      padding: 10px;
+      background: #fffaf0;
+      border: 1px dashed #ffc107;
+      border-radius: 8px;
+      text-align: center;
+      display: none;
+    }
+    
+    .tab-container {
+      display: flex;
+      margin-top: 15px;
+      border-bottom: 1px solid #e6e6e6;
+    }
+    
+    .tab {
+      padding: 8px 15px;
+      cursor: pointer;
+      font-size: 14px;
+      border-bottom: 2px solid transparent;
+    }
+    
+    .tab.active {
+      border-bottom: 2px solid #0b55e8;
+      color: #0b55e8;
+      font-weight: bold;
+    }
+    
+    #leaderboard, #badges, #challenges {
+      display: none;
+      padding: 10px 0;
     }
   </style>
 </head>
 <body>
-  <h1>BotSpotter</h1>
+  <div class="header">
+    <img src="images/octopal-logo.png" alt="OctoPal Logo" class="logo">
+    <h1>OctoPal</h1>
+  </div>
+  
+  <div class="user-stats">
+    <div class="stat-box">
+      <div class="stat-value" id="user-points">0</div>
+      <div class="stat-label">POINTS</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value" id="user-reports">0</div>
+      <div class="stat-label">REPORTS</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value" id="user-level">1</div>
+      <div class="stat-label">LEVEL</div>
+    </div>
+  </div>
   
   <div class="content">
     <div class="stats">
-      <h3>Bot Likelihood</h3>
+      <h3><span class="icon">🤖</span> Bot Likelihood</h3>
       <div class="progress-bar">
         <div id="bot-likelihood" class="progress" style="width: 0%"></div>
       </div>
-      <div id="bot-value">Analyzing...</div>
+      <div class="result-details">
+        <div id="bot-value">Analyzing...</div>
+        <div id="bot-points"></div>
+      </div>
     </div>
 
     <div class="stats">
-      <h3>Misinformation Score</h3>
+      <h3><span class="icon">🔍</span> Misinformation Score</h3>
       <div class="progress-bar">
         <div id="misinfo-likelihood" class="progress" style="width: 0%"></div>
       </div>
-      <div id="misinfo-value">Analyzing...</div>
+      <div class="result-details">
+        <div id="misinfo-value">Analyzing...</div>
+        <div id="misinfo-points"></div>
+      </div>
     </div>
     
-    <button id="report-button">Report as Bot/Misinformation</button>
+    <div class="rewards" id="rewards-box">
+      <h4>🎉 Great job spotting this content!</h4>
+      <div id="reward-details">+0 points</div>
+    </div>
+    
+    <div class="action-row">
+      <button id="report-button">Report Content</button>
+      <button id="share-button">Share Finding</button>
+    </div>
+  </div>
+  
+  <div class="tab-container">
+    <div class="tab active" data-tab="analysis">Analysis</div>
+    <div class="tab" data-tab="leaderboard">Leaderboard</div>
+    <div class="tab" data-tab="badges">Badges</div>
+    <div class="tab" data-tab="challenges">Challenges</div>
+  </div>
+  
+  <div id="leaderboard">
+    <p>Loading leaderboard data...</p>
+  </div>
+  
+  <div id="badges">
+    <p>Complete actions to earn badges!</p>
+  </div>
+  
+  <div id="challenges">
+    <p>Daily challenge: Report 3 suspicious posts</p>
   </div>
   
   <script src="popup.js"></script>
