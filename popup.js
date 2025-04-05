@@ -12,7 +12,9 @@ const tabs = document.querySelectorAll('.tab');
 const contentSections = document.querySelectorAll('#leaderboard, #badges, #challenges');
 
 // When popup opens, get current tab and analyze
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', refreshUI);
+
+function refreshUI() {
   // Get current tab info
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
     // If we have a tab and it's Twitter/X
@@ -42,7 +44,7 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Setup tabs
   setupTabs();
-});
+}
 
 // Tab functionality
 function setupTabs() {
