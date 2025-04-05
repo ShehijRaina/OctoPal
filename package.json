@@ -1,0 +1,16 @@
+{
+  "name": "botspotter",
+  "version": "0.1.0",
+  "description": "Browser extension to identify bots and misinformation on social media",
+  "main": "background.js",
+  "scripts": {
+    "build": "echo 'No build process required for this simple version'"
+  },
+  "keywords": [
+    "browser-extension",
+    "misinformation",
+    "bot-detection"
+  ],
+  "author": "BathHack2025",
+  "license": "MIT"
+} 

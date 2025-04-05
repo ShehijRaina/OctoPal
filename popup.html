@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>BotSpotter</title>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      width: 300px;
+      padding: 10px;
+      font-family: Arial, sans-serif;
+    }
+    h1 {
+      color: #4e54c8;
+      text-align: center;
+    }
+    .content {
+      margin: 15px 0;
+    }
+    .stats {
+      margin-bottom: 10px;
+      padding: 10px;
+      background: #f5f7fa;
+      border-radius: 8px;
+    }
+    .progress-bar {
+      height: 10px;
+      background-color: #e0e0e0;
+      border-radius: 5px;
+      margin: 5px 0;
+    }
+    .progress {
+      height: 100%;
+      background-color: #4e54c8;
+      border-radius: 5px;
+      transition: width 0.3s;
+    }
+    .bot-high {
+      background-color: #ff6b6b;
+    }
+    .bot-medium {
+      background-color: #ffd166;
+    }
+    .bot-low {
+      background-color: #5cdb95;
+    }
+    button {
+      background-color: #4e54c8;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      width: 100%;
+      margin-top: 10px;
+    }
+    button:hover {
+      background-color: #8f94fb;
+    }
+  </style>
+</head>
+<body>
+  <h1>BotSpotter</h1>
+  
+  <div class="content">
+    <div class="stats">
+      <h3>Bot Likelihood</h3>
+      <div class="progress-bar">
+        <div id="bot-likelihood" class="progress" style="width: 0%"></div>
+      </div>
+      <div id="bot-value">Analyzing...</div>
+    </div>
+
+    <div class="stats">
+      <h3>Misinformation Score</h3>
+      <div class="progress-bar">
+        <div id="misinfo-likelihood" class="progress" style="width: 0%"></div>
+      </div>
+      <div id="misinfo-value">Analyzing...</div>
+    </div>
+    
+    <button id="report-button">Report as Bot/Misinformation</button>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html> 

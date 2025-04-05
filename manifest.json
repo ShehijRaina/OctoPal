@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "BotSpotter",
+  "version": "0.1.0",
+  "description": "Identify bots and misinformation on social media",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://*.twitter.com/*",
+    "https://*.x.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.twitter.com/*",
+        "https://*.x.com/*"
+      ],
+      "js": ["content.js"]
+    }
+  ]
+} 
