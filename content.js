@@ -27,7 +27,15 @@ async function analyzeCurrentPage() {
   // This is a very simplified implementation
   // In a real extension, you would use more sophisticated analysis
   
-  const tweetElements = document.querySelectorAll('[data-testid="tweet"]');
+  const allTweets = document.querySelectorAll('[data-testid="tweet"]');
+
+  // Filter tweets that are visible in the viewport
+  const tweetElements = Array.from(allTweets).filter(tweet => {
+    const rect = tweet.getBoundingClientRect();
+    return rect.top >= 0 && rect.bottom <= window.innerHeight && rect.left >= 0 && rect.right <= window.innerWidth;
+});
+
+
   let botScoreTotal = 0;
   let misinfoScoreTotal = 0;
   
@@ -106,6 +114,8 @@ function analyzeTweetForMisinformation(tweetElement) {
   if (!tweetTextElement) return Math.floor(Math.random() * 30); // Return random score if no text
   
   const tweetText = tweetTextElement.textContent || '';
+
+  console.log('Analyzing tweet text:', tweetText);
   
   // 1. Check for excessive capitalization (often used in misleading content)
   const uppercaseRatio = (tweetText.replace(/[^A-Z]/g, '').length) / 
