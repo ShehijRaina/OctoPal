@@ -7,6 +7,8 @@ const analyzedTweets = new Map();
 const userPostFrequency = new Map();
 // Cache for user account creation dates
 const userAgeCache = new Map();
+// Cache for user hashtag patterns
+const userHashtagPatterns = new Map();
 
 // Listen for messages from the popup
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
@@ -19,8 +21,10 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         botScore: results.botScore,
         misinfoScore: results.misinfoScore,
         postingFrequencyScore: results.postingFrequencyScore,
+        hashtagPatternScore: results.hashtagPatternScore,
         detectedPatterns: results.detectedPatterns,
-        accountAgeData: results.accountAgeData
+        accountAgeData: results.accountAgeData,
+        hashtagInsights: results.hashtagInsights
       });
     }).catch(error => {
       console.error('OctoPal: Error analyzing page', error);
@@ -48,8 +52,10 @@ async function analyzeCurrentPage() {
   let botScoreTotal = 0;
   let misinfoScoreTotal = 0;
   let postingFrequencyScoreTotal = 0;
+  let hashtagPatternScoreTotal = 0;
   let detectedPatterns = [];
   let accountAgeData = [];
+  let hashtagInsights = [];
   
   // If no tweets found, return default scores
   if (tweetElements.length === 0) {
@@ -57,13 +63,15 @@ async function analyzeCurrentPage() {
       botScore: 0,
       misinfoScore: 0,
       postingFrequencyScore: 0,
+      hashtagPatternScore: 0,
       detectedPatterns: [],
-      accountAgeData: []
+      accountAgeData: [],
+      hashtagInsights: []
     };
   }
   
-  // First pass: collect user IDs and timestamps for posting frequency analysis
-  await collectUserPostingData(tweetElements);
+  // First pass: collect user IDs, timestamps, and hashtags for pattern analysis
+  await collectUserData(tweetElements);
   
   // Second pass: analyze each tweet with enhanced context
   for (const tweet of tweetElements) {
@@ -76,7 +84,9 @@ async function analyzeCurrentPage() {
       botScoreTotal += cachedAnalysis.botScore;
       misinfoScoreTotal += cachedAnalysis.misinfoScore;
       postingFrequencyScoreTotal += cachedAnalysis.postingFrequencyScore;
+      hashtagPatternScoreTotal += cachedAnalysis.hashtagPatternScore || 0;
       if (cachedAnalysis.pattern) detectedPatterns.push(cachedAnalysis.pattern);
+      if (cachedAnalysis.hashtagInsight) hashtagInsights.push(cachedAnalysis.hashtagInsight);
       continue;
     }
     
@@ -105,35 +115,172 @@ async function analyzeCurrentPage() {
     // Analyze for posting frequency patterns
     const { score: postingFrequencyScore, pattern } = analyzePostingFrequency(tweet);
     
+    // Analyze for hashtag usage patterns
+    const { score: hashtagPatternScore, insight: hashtagInsight } = analyzeHashtagPatterns(tweet);
+    
     // Cache the results
     analyzedTweets.set(tweetId, { 
       botScore, 
       misinfoScore, 
       postingFrequencyScore,
-      pattern: pattern ? pattern : null
+      hashtagPatternScore,
+      pattern: pattern ? pattern : null,
+      hashtagInsight: hashtagInsight ? hashtagInsight : null
     });
     
     botScoreTotal += botScore;
     misinfoScoreTotal += misinfoScore;
     postingFrequencyScoreTotal += postingFrequencyScore;
+    hashtagPatternScoreTotal += hashtagPatternScore;
     if (pattern) detectedPatterns.push(pattern);
+    if (hashtagInsight) hashtagInsights.push(hashtagInsight);
   }
   
   // Calculate average scores
   const botScore = Math.min(Math.round(botScoreTotal / tweetElements.length), 100);
   const misinfoScore = Math.min(Math.round(misinfoScoreTotal / tweetElements.length), 100);
   const postingFrequencyScore = Math.min(Math.round(postingFrequencyScoreTotal / tweetElements.length), 100);
+  const hashtagPatternScore = Math.min(Math.round(hashtagPatternScoreTotal / tweetElements.length), 100);
   
-  // Filter out duplicate patterns
+  // Filter out duplicate patterns and insights
   const uniquePatterns = [...new Set(detectedPatterns)];
+  const uniqueHashtagInsights = [...new Set(hashtagInsights)];
   
   return {
     botScore,
     misinfoScore,
     postingFrequencyScore,
+    hashtagPatternScore,
     detectedPatterns: uniquePatterns.slice(0, 5), // Limit to top 5 patterns
-    accountAgeData: accountAgeData.slice(0, 3) // Limit to top 3 accounts
+    accountAgeData: accountAgeData.slice(0, 3), // Limit to top 3 accounts
+    hashtagInsights: uniqueHashtagInsights.slice(0, 3) // Limit to top 3 hashtag insights
   };
+}
+
+// Collect user data for analysis
+async function collectUserData(tweetElements) {
+  for (const tweet of tweetElements) {
+    const username = getUsernameFromTweet(tweet);
+    if (!username || username === 'unknown') continue;
+    
+    // Get timestamp from tweet if available (for posting frequency)
+    const timestamp = getTweetTimestamp(tweet);
+    
+    // Store in userPostFrequency map
+    if (!userPostFrequency.has(username)) {
+      userPostFrequency.set(username, {
+        postCount: 1,
+        timestamps: timestamp ? [timestamp] : [],
+        firstSeen: Date.now()
+      });
+    } else {
+      const userData = userPostFrequency.get(username);
+      userData.postCount += 1;
+      if (timestamp) userData.timestamps.push(timestamp);
+      userPostFrequency.set(username, userData);
+    }
+    
+    // Collect hashtags for hashtag pattern analysis
+    const tweetText = getTweetText(tweet);
+    if (tweetText) {
+      const hashtags = extractHashtags(tweetText);
+      if (hashtags.length > 0) {
+        if (!userHashtagPatterns.has(username)) {
+          userHashtagPatterns.set(username, {
+            tweets: 1,
+            totalHashtags: hashtags.length,
+            uniqueHashtags: new Set(hashtags),
+            hashtagCounts: hashtags.reduce((counts, tag) => {
+              counts[tag] = (counts[tag] || 0) + 1;
+              return counts;
+            }, {}),
+            hashtagPositions: getHashtagPositions(tweetText, hashtags)
+          });
+        } else {
+          const hashtagData = userHashtagPatterns.get(username);
+          hashtagData.tweets += 1;
+          hashtagData.totalHashtags += hashtags.length;
+          hashtags.forEach(tag => hashtagData.uniqueHashtags.add(tag));
+          
+          // Update hashtag counts
+          for (const tag of hashtags) {
+            hashtagData.hashtagCounts[tag] = (hashtagData.hashtagCounts[tag] || 0) + 1;
+          }
+          
+          // Store hashtag positions
+          const positions = getHashtagPositions(tweetText, hashtags);
+          hashtagData.hashtagPositions = [...hashtagData.hashtagPositions, ...positions];
+          
+          userHashtagPatterns.set(username, hashtagData);
+        }
+      }
+    }
+  }
+}
+
+// Get the positions of hashtags in a tweet (beginning, middle, end, grouped)
+function getHashtagPositions(tweetText, hashtags) {
+  if (!tweetText || !hashtags.length) return [];
+  
+  const positions = [];
+  const words = tweetText.split(/\s+/);
+  const totalWords = words.length;
+  
+  if (totalWords <= 1) return []; // Skip if just one word
+  
+  let consecutiveHashtags = 0;
+  let lastWasHashtag = false;
+  
+  words.forEach((word, index) => {
+    const isHashtag = word.startsWith('#');
+    
+    if (isHashtag) {
+      // Determine position in tweet
+      if (index === 0) {
+        positions.push('beginning');
+      } else if (index === totalWords - 1) {
+        positions.push('end');
+      } else {
+        positions.push('middle');
+      }
+      
+      // Check for consecutive hashtags
+      if (lastWasHashtag) {
+        consecutiveHashtags++;
+        if (consecutiveHashtags >= 3) {
+          positions.push('grouped');
+        }
+      } else {
+        consecutiveHashtags = 1;
+      }
+    }
+    
+    lastWasHashtag = isHashtag;
+  });
+  
+  return positions;
+}
+
+// Extract hashtags from tweet text
+function extractHashtags(text) {
+  if (!text) return [];
+  
+  const hashtags = [];
+  const matches = text.match(/#\w+/g);
+  
+  if (matches) {
+    matches.forEach(tag => {
+      hashtags.push(tag.toLowerCase());
+    });
+  }
+  
+  return hashtags;
+}
+
+// Get tweet text
+function getTweetText(tweetElement) {
+  const tweetTextElement = tweetElement.querySelector('[data-testid="tweetText"]');
+  return tweetTextElement ? tweetTextElement.textContent : '';
 }
 
 // Get a unique identifier for a tweet
@@ -535,4 +682,124 @@ function extractUserIdFromUsername(username) {
   }
   
   return username;
+}
+
+// Analyze hashtag patterns
+function analyzeHashtagPatterns(tweetElement) {
+  let score = 0;
+  let insight = null;
+  
+  const username = getUsernameFromTweet(tweetElement);
+  if (!username || username === 'unknown') return { score: 0, insight: null };
+  
+  const userData = userHashtagPatterns.get(username);
+  if (!userData) return { score: 0, insight: null };
+  
+  const tweetText = getTweetText(tweetElement);
+  const hashtags = extractHashtags(tweetText);
+  const hashtagCount = hashtags.length;
+  
+  // 1. Check hashtag density (hashtags per word)
+  if (tweetText) {
+    const wordCount = tweetText.split(/\s+/).length;
+    const hashtagDensity = hashtagCount / wordCount;
+    
+    if (hashtagDensity > 0.4) { // More than 40% of words are hashtags
+      score += 25;
+      insight = "High hashtag density";
+    } else if (hashtagDensity > 0.25) { // More than 25% of words are hashtags
+      score += 15;
+      insight = "Moderate hashtag density";
+    }
+  }
+  
+  // 2. Check for repetitive hashtag patterns across tweets
+  if (userData.tweets > 1) {
+    // Calculate repetition ratio (total hashtags / unique hashtags)
+    const uniqueCount = userData.uniqueHashtags.size;
+    const repetitionRatio = userData.totalHashtags / uniqueCount;
+    
+    if (repetitionRatio > 3) { // Same hashtags used more than 3 times on average
+      score += 20;
+      insight = "Repetitive hashtag usage across tweets";
+    } else if (repetitionRatio > 2) {
+      score += 10;
+    }
+    
+    // Check if any single hashtag is used excessively
+    for (const [tag, count] of Object.entries(userData.hashtagCounts)) {
+      if (count >= 3) {
+        score += 15;
+        insight = `Excessive use of ${tag}`;
+        break;
+      }
+    }
+  }
+  
+  // 3. Check hashtag positions
+  if (userData.hashtagPositions.includes('grouped')) {
+    score += 15;
+    insight = insight || "Grouped hashtags pattern";
+  }
+  
+  // Check for hashtags exclusively at the end (common spam pattern)
+  if (userData.hashtagPositions.filter(p => p === 'end').length >= 3 &&
+      !userData.hashtagPositions.includes('beginning') &&
+      !userData.hashtagPositions.includes('middle')) {
+    score += 20;
+    insight = "Hashtags exclusively at tweet end";
+  }
+  
+  // 4. Check hashtag count threshold in current tweet
+  if (hashtagCount > 6) {
+    score += 25;
+    insight = insight || `Excessive hashtags in tweet (${hashtagCount})`;
+  } else if (hashtagCount > 4) {
+    score += 15;
+    insight = insight || "Multiple hashtags in tweet";
+  }
+  
+  // 5. Check for unrelated hashtag combinations (hashtag stuffing)
+  if (hashtagCount >= 3) {
+    // This is a simplified check. In a real extension, you would use
+    // semantic analysis to detect unrelated hashtags
+    const unrelatedCategories = checkForUnrelatedHashtags(hashtags);
+    if (unrelatedCategories >= 3) {
+      score += 20;
+      insight = "Unrelated hashtag combinations";
+    }
+  }
+  
+  // Add some randomness for demonstration
+  score += Math.floor(Math.random() * 5);
+  
+  return {
+    score: Math.min(score, 100),
+    insight: insight
+  };
+}
+
+// Simple check for unrelated hashtags (in a real extension this would be more sophisticated)
+function checkForUnrelatedHashtags(hashtags) {
+  // Categories for demo purposes
+  const categories = {
+    politics: ['#politics', '#biden', '#trump', '#election', '#democrat', '#republican'],
+    entertainment: ['#movie', '#music', '#netflix', '#celebrity', '#hollywood'],
+    sports: ['#nba', '#football', '#soccer', '#baseball', '#sports'],
+    technology: ['#tech', '#ai', '#programming', '#coding', '#software'],
+    health: ['#covid', '#health', '#vaccine', '#fitness', '#wellness']
+  };
+  
+  // Count how many different categories appear in the hashtags
+  const categoriesFound = new Set();
+  
+  for (const tag of hashtags) {
+    for (const [category, terms] of Object.entries(categories)) {
+      if (terms.some(term => tag.toLowerCase().includes(term.toLowerCase().substring(1)))) {
+        categoriesFound.add(category);
+      }
+    }
+  }
+  
+  return categoriesFound.size;
 } 

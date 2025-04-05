@@ -25,9 +25,11 @@ function refreshUI() {
           updateUI(
             response.botScore, 
             response.misinfoScore, 
-            response.postingFrequencyScore, 
+            response.postingFrequencyScore,
+            response.hashtagPatternScore,
             response.detectedPatterns,
-            response.accountAgeData
+            response.accountAgeData,
+            response.hashtagInsights
           );
         } else {
           showError();
@@ -80,7 +82,7 @@ function setupTabs() {
 }
 
 // Update UI with scores
-function updateUI(botScore, misinfoScore, postingFrequencyScore, detectedPatterns, accountAgeData) {
+function updateUI(botScore, misinfoScore, postingFrequencyScore, hashtagPatternScore, detectedPatterns, accountAgeData, hashtagInsights) {
   // Update bot likelihood
   botLikelihoodBar.style.width = botScore + '%';
   botLikelihoodValue.textContent = botScore + '% likelihood of bot activity';
@@ -122,6 +124,24 @@ function updateUI(botScore, misinfoScore, postingFrequencyScore, detectedPattern
       postingFrequencyBar.className = 'progress bot-medium';
     } else {
       postingFrequencyBar.className = 'progress bot-high';
+    }
+  }
+  
+  // Add hashtag pattern info if the element exists
+  const hashtagPatternBar = document.getElementById('hashtag-pattern');
+  const hashtagPatternValue = document.getElementById('hashtag-pattern-value');
+  
+  if (hashtagPatternBar && hashtagPatternValue) {
+    hashtagPatternBar.style.width = hashtagPatternScore + '%';
+    hashtagPatternValue.textContent = hashtagPatternScore + '% suspicious hashtag patterns';
+    
+    // Set color based on risk level
+    if (hashtagPatternScore < 30) {
+      hashtagPatternBar.className = 'progress bot-low';
+    } else if (hashtagPatternScore < 70) {
+      hashtagPatternBar.className = 'progress bot-medium';
+    } else {
+      hashtagPatternBar.className = 'progress bot-high';
     }
   }
   
@@ -196,6 +216,30 @@ function updateUI(botScore, misinfoScore, postingFrequencyScore, detectedPattern
     accountAgeContainer.style.display = 'none';
   }
   
+  // Display hashtag insights if available
+  const hashtagInsightsContainer = document.getElementById('hashtag-insights');
+  if (hashtagInsightsContainer && hashtagInsights && hashtagInsights.length > 0) {
+    hashtagInsightsContainer.innerHTML = '';
+    hashtagInsightsContainer.style.display = 'block';
+    
+    const insightsTitle = document.createElement('h4');
+    insightsTitle.textContent = 'Hashtag Analysis:';
+    hashtagInsightsContainer.appendChild(insightsTitle);
+    
+    const insightsList = document.createElement('ul');
+    insightsList.className = 'hashtag-insights-list';
+    
+    hashtagInsights.forEach(insight => {
+      const item = document.createElement('li');
+      item.innerHTML = `<span class="high-risk">⚠️</span> ${insight}`;
+      insightsList.appendChild(item);
+    });
+    
+    hashtagInsightsContainer.appendChild(insightsList);
+  } else if (hashtagInsightsContainer) {
+    hashtagInsightsContainer.style.display = 'none';
+  }
+  
   // Show/hide action buttons
   reportButton.disabled = false;
   shareButton.disabled = false;
@@ -221,6 +265,16 @@ function showError() {
     accountAgeContainer.style.display = 'none';
   }
   
+  const hashtagPatternValue = document.getElementById('hashtag-pattern-value');
+  if (hashtagPatternValue) {
+    hashtagPatternValue.textContent = 'Error analyzing content';
+  }
+  
+  const hashtagInsightsContainer = document.getElementById('hashtag-insights');
+  if (hashtagInsightsContainer) {
+    hashtagInsightsContainer.style.display = 'none';
+  }
+  
   reportButton.disabled = true;
   shareButton.disabled = true;
 }
@@ -243,6 +297,16 @@ function showNotSupported() {
   const accountAgeContainer = document.getElementById('account-age-info');
   if (accountAgeContainer) {
     accountAgeContainer.style.display = 'none';
+  }
+  
+  const hashtagPatternValue = document.getElementById('hashtag-pattern-value');
+  if (hashtagPatternValue) {
+    hashtagPatternValue.textContent = 'Not a supported platform';
+  }
+  
+  const hashtagInsightsContainer = document.getElementById('hashtag-insights');
+  if (hashtagInsightsContainer) {
+    hashtagInsightsContainer.style.display = 'none';
   }
   
   reportButton.disabled = true;
@@ -298,6 +362,12 @@ function shareAnalysis() {
       if (postingFrequencyBar) {
         const postingFrequencyScore = postingFrequencyBar.style.width.replace('%', '');
         shareText += ` and ${postingFrequencyScore}% suspicious posting patterns`;
+      }
+      
+      const hashtagPatternBar = document.getElementById('hashtag-pattern');
+      if (hashtagPatternBar) {
+        const hashtagPatternScore = hashtagPatternBar.style.width.replace('%', '');
+        shareText += `, ${hashtagPatternScore}% suspicious hashtag usage`;
       }
       
       shareText += ` using OctoPal! Check it out: ${tabs[0].url}`;

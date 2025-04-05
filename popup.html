@@ -253,6 +253,37 @@
     .no-risk {
       color: #3bb878;
     }
+    
+    #hashtag-insights {
+      margin-top: 15px;
+      padding: 10px;
+      background-color: #f8f8f8;
+      border-radius: 6px;
+      display: none;
+    }
+    
+    #hashtag-insights h4 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      color: #0b55e8;
+      font-size: 14px;
+    }
+    
+    .hashtag-insights-list {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 13px;
+    }
+    
+    .hashtag-insights-list li {
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+    
+    .hashtag-insights-list li span.high-risk {
+      color: #ff3838;
+      margin-right: 5px;
+    }
   </style>
 </head>
 <body>
@@ -310,11 +341,25 @@
       </div>
     </div>
     
+    <div class="stats">
+      <h3><span class="icon">#️⃣</span> Hashtag Patterns</h3>
+      <div class="progress-bar">
+        <div id="hashtag-pattern" class="progress" style="width: 0%"></div>
+      </div>
+      <div class="result-details">
+        <div id="hashtag-pattern-value">Analyzing...</div>
+        <div id="hashtag-points"></div>
+      </div>
+    </div>
+    
     <!-- Detected Patterns Container -->
     <div id="detected-patterns"></div>
     
     <!-- Account Age Information -->
     <div id="account-age-info"></div>
+    
+    <!-- Hashtag Insights -->
+    <div id="hashtag-insights"></div>
     
     <div class="rewards" id="rewards-box">
       <h4>🎉 Great job spotting this content!</h4>
