@@ -22,7 +22,13 @@ function refreshUI() {
       // Send message to content script to analyze current page
       chrome.tabs.sendMessage(tabs[0].id, {action: "analyze"}, function(response) {
         if (response && response.success) {
-          updateUI(response.botScore, response.misinfoScore, response.postingFrequencyScore, response.detectedPatterns);
+          updateUI(
+            response.botScore, 
+            response.misinfoScore, 
+            response.postingFrequencyScore, 
+            response.detectedPatterns,
+            response.accountAgeData
+          );
         } else {
           showError();
         }
@@ -74,7 +80,7 @@ function setupTabs() {
 }
 
 // Update UI with scores
-function updateUI(botScore, misinfoScore, postingFrequencyScore, detectedPatterns) {
+function updateUI(botScore, misinfoScore, postingFrequencyScore, detectedPatterns, accountAgeData) {
   // Update bot likelihood
   botLikelihoodBar.style.width = botScore + '%';
   botLikelihoodValue.textContent = botScore + '% likelihood of bot activity';
@@ -143,6 +149,53 @@ function updateUI(botScore, misinfoScore, postingFrequencyScore, detectedPattern
     patternsContainer.style.display = 'none';
   }
   
+  // Display account age information if available
+  const accountAgeContainer = document.getElementById('account-age-info');
+  if (accountAgeContainer && accountAgeData && accountAgeData.length > 0) {
+    accountAgeContainer.innerHTML = '';
+    accountAgeContainer.style.display = 'block';
+    
+    const ageTitle = document.createElement('h4');
+    ageTitle.textContent = 'Account Age Information:';
+    accountAgeContainer.appendChild(ageTitle);
+    
+    const ageList = document.createElement('ul');
+    ageList.className = 'account-age-list';
+    
+    accountAgeData.forEach(account => {
+      const item = document.createElement('li');
+      
+      // Format the account age in a human-readable way
+      let ageText = '';
+      if (account.accountAgeInDays < 30) {
+        ageText = `${account.accountAgeInDays} days old`;
+      } else if (account.accountAgeInDays < 365) {
+        ageText = `${Math.round(account.accountAgeInDays / 30)} months old`;
+      } else {
+        ageText = `${Math.round(account.accountAgeInDays / 365)} years old`;
+      }
+      
+      // Assign a risk level based on the age score
+      let riskLevel = '';
+      if (account.ageScore >= 20) {
+        riskLevel = '<span class="high-risk">High Risk</span>';
+      } else if (account.ageScore >= 10) {
+        riskLevel = '<span class="medium-risk">Medium Risk</span>';
+      } else if (account.ageScore > 0) {
+        riskLevel = '<span class="low-risk">Low Risk</span>';
+      } else {
+        riskLevel = '<span class="no-risk">No Risk</span>';
+      }
+      
+      item.innerHTML = `<strong>${account.username}</strong>: ${ageText} (joined ${account.joinDate}) ${riskLevel}`;
+      ageList.appendChild(item);
+    });
+    
+    accountAgeContainer.appendChild(ageList);
+  } else if (accountAgeContainer) {
+    accountAgeContainer.style.display = 'none';
+  }
+  
   // Show/hide action buttons
   reportButton.disabled = false;
   shareButton.disabled = false;
@@ -163,6 +216,11 @@ function showError() {
     patternsContainer.style.display = 'none';
   }
   
+  const accountAgeContainer = document.getElementById('account-age-info');
+  if (accountAgeContainer) {
+    accountAgeContainer.style.display = 'none';
+  }
+  
   reportButton.disabled = true;
   shareButton.disabled = true;
 }
@@ -180,6 +238,11 @@ function showNotSupported() {
   const patternsContainer = document.getElementById('detected-patterns');
   if (patternsContainer) {
     patternsContainer.style.display = 'none';
+  }
+  
+  const accountAgeContainer = document.getElementById('account-age-info');
+  if (accountAgeContainer) {
+    accountAgeContainer.style.display = 'none';
   }
   
   reportButton.disabled = true;

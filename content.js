@@ -5,6 +5,8 @@ console.log('OctoPal: Content script loaded');
 const analyzedTweets = new Map();
 // Cache for user posting frequencies
 const userPostFrequency = new Map();
+// Cache for user account creation dates
+const userAgeCache = new Map();
 
 // Listen for messages from the popup
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
@@ -17,7 +19,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         botScore: results.botScore,
         misinfoScore: results.misinfoScore,
         postingFrequencyScore: results.postingFrequencyScore,
-        detectedPatterns: results.detectedPatterns
+        detectedPatterns: results.detectedPatterns,
+        accountAgeData: results.accountAgeData
       });
     }).catch(error => {
       console.error('OctoPal: Error analyzing page', error);
@@ -46,6 +49,7 @@ async function analyzeCurrentPage() {
   let misinfoScoreTotal = 0;
   let postingFrequencyScoreTotal = 0;
   let detectedPatterns = [];
+  let accountAgeData = [];
   
   // If no tweets found, return default scores
   if (tweetElements.length === 0) {
@@ -53,7 +57,8 @@ async function analyzeCurrentPage() {
       botScore: 0,
       misinfoScore: 0,
       postingFrequencyScore: 0,
-      detectedPatterns: []
+      detectedPatterns: [],
+      accountAgeData: []
     };
   }
   
@@ -77,6 +82,22 @@ async function analyzeCurrentPage() {
     
     // Analyze for bot-like patterns
     const botScore = analyzeTweetForBotPatterns(tweet);
+    
+    // Get account age data
+    const username = getUsernameFromTweet(tweet);
+    const userId = extractUserIdFromUsername(username);
+    if (userId && userAgeCache.has(userId)) {
+      const joinDate = userAgeCache.get(userId);
+      const ageScore = calculateAgeScore(joinDate);
+      const accountAgeInDays = Math.floor((new Date() - joinDate) / (1000 * 60 * 60 * 24));
+      
+      accountAgeData.push({
+        username,
+        joinDate: joinDate.toISOString().split('T')[0], // Format as YYYY-MM-DD
+        accountAgeInDays,
+        ageScore
+      });
+    }
     
     // Analyze for misinformation patterns
     const misinfoScore = analyzeTweetForMisinformation(tweet);
@@ -110,7 +131,8 @@ async function analyzeCurrentPage() {
     botScore,
     misinfoScore,
     postingFrequencyScore,
-    detectedPatterns: uniquePatterns.slice(0, 5) // Limit to top 5 patterns
+    detectedPatterns: uniquePatterns.slice(0, 5), // Limit to top 5 patterns
+    accountAgeData: accountAgeData.slice(0, 3) // Limit to top 3 accounts
   };
 }
 
@@ -181,13 +203,11 @@ function getTweetTimestamp(tweetElement) {
 // Simple bot detection logic (very basic for demonstration)
 function analyzeTweetForBotPatterns(tweetElement) {
   let score = 0;
+  let accountAgeScore = 0;
   
   // 1. Check account age if available
-  // For this demo, we're randomly assigning a score component
-  // In a real extension, you'd check the actual creation date
-  if (Math.random() < 0.3) {
-    score += 20; // Simulate "new account" detection
-  }
+  accountAgeScore = checkAccountAge(tweetElement);
+  score += accountAgeScore;
   
   // 2. Check for username patterns that might indicate bots
   const usernameElement = tweetElement.querySelector('[data-testid="User-Name"]');
@@ -226,6 +246,96 @@ function analyzeTweetForBotPatterns(tweetElement) {
   score += Math.floor(Math.random() * 10);
   
   return Math.min(score, 100);
+}
+
+// Check the account age and return a score
+function checkAccountAge(tweetElement) {
+  // Try to find user profile link to navigate to profile page
+  const userProfileLink = tweetElement.querySelector('a[href*="/status/"]')?.closest('article')?.querySelector('a[role="link"][tabindex="-1"]');
+  
+  if (!userProfileLink) return 0;
+  
+  const userId = extractUserId(userProfileLink.getAttribute('href'));
+  if (!userId) return 0;
+  
+  // Check if we have already cached this user's creation date
+  if (userAgeCache.has(userId)) {
+    return calculateAgeScore(userAgeCache.get(userId));
+  }
+  
+  // For this version, we'll use a fallback method that extracts age from the UI if possible
+  const joinDateElement = document.querySelector(`a[href="/${userId}"] + div span`);
+  
+  if (joinDateElement) {
+    const joinDateText = joinDateElement.textContent || '';
+    // Try to extract date from format like "Joined June 2022" or "Joined March 2010"
+    const joinDateMatch = joinDateText.match(/Joined\s+(\w+)\s+(\d{4})/i);
+    
+    if (joinDateMatch && joinDateMatch.length === 3) {
+      const month = getMonthNumber(joinDateMatch[1]);
+      const year = parseInt(joinDateMatch[2]);
+      
+      if (!isNaN(month) && !isNaN(year)) {
+        const joinDate = new Date(year, month - 1, 1); // We only have month precision
+        userAgeCache.set(userId, joinDate);
+        return calculateAgeScore(joinDate);
+      }
+    }
+  }
+  
+  // Try to fetch join date via Twitter API in a future version
+  // This would require additional permissions and a backend service
+  
+  return 0; // Default if we can't determine account age
+}
+
+// Extract user ID from profile URL
+function extractUserId(url) {
+  if (!url) return null;
+  
+  // URL pattern: /username or /username/status/123456
+  const match = url.match(/^\/([^/]+)(?:\/|$)/);
+  return match ? match[1] : null;
+}
+
+// Convert month name to number
+function getMonthNumber(monthName) {
+  const months = {
+    'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
+    'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12
+  };
+  
+  return months[monthName.toLowerCase()] || 0;
+}
+
+// Calculate score based on account age
+function calculateAgeScore(joinDate) {
+  if (!joinDate) return 0;
+  
+  const now = new Date();
+  const accountAgeInDays = Math.floor((now - joinDate) / (1000 * 60 * 60 * 24));
+  
+  // Scoring logic:
+  // <30 days: 25 points (very suspicious)
+  // 30-90 days: 20 points (suspicious)
+  // 90-180 days: 15 points (somewhat suspicious)
+  // 180-365 days: 10 points (slightly suspicious)
+  // 1-2 years: 5 points (low suspicion)
+  // >2 years: 0 points (not suspicious)
+  
+  if (accountAgeInDays < 30) {
+    return 25;
+  } else if (accountAgeInDays < 90) {
+    return 20;
+  } else if (accountAgeInDays < 180) {
+    return 15;
+  } else if (accountAgeInDays < 365) {
+    return 10;
+  } else if (accountAgeInDays < 730) {
+    return 5;
+  }
+  
+  return 0; // Account older than 2 years
 }
 
 // Analyze posting frequency patterns
@@ -413,4 +523,16 @@ function analyzeTweetForMisinformation(tweetElement) {
   score += Math.floor(Math.random() * 10);
   
   return Math.min(score, 100);
+}
+
+// Extract user ID from username
+function extractUserIdFromUsername(username) {
+  if (!username || username === 'unknown') return null;
+  
+  // If it starts with @, remove it
+  if (username.startsWith('@')) {
+    username = username.substring(1);
+  }
+  
+  return username;
 } 

@@ -208,6 +208,51 @@
       color: #0b55e8;
       font-size: 14px;
     }
+    
+    #account-age-info {
+      margin-top: 15px;
+      padding: 10px;
+      background-color: #f8f8f8;
+      border-radius: 6px;
+      display: none;
+    }
+    
+    #account-age-info h4 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      color: #0b55e8;
+      font-size: 14px;
+    }
+    
+    .account-age-list {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 13px;
+    }
+    
+    .account-age-list li {
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+    
+    .high-risk {
+      color: #ff3838;
+      font-weight: bold;
+    }
+    
+    .medium-risk {
+      color: #ffb347;
+      font-weight: bold;
+    }
+    
+    .low-risk {
+      color: #3bb878;
+      font-weight: bold;
+    }
+    
+    .no-risk {
+      color: #3bb878;
+    }
   </style>
 </head>
 <body>
@@ -267,6 +312,9 @@
     
     <!-- Detected Patterns Container -->
     <div id="detected-patterns"></div>
+    
+    <!-- Account Age Information -->
+    <div id="account-age-info"></div>
     
     <div class="rewards" id="rewards-box">
       <h4>🎉 Great job spotting this content!</h4>
