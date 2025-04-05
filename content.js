@@ -24,7 +24,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         hashtagPatternScore: results.hashtagPatternScore,
         detectedPatterns: results.detectedPatterns,
         accountAgeData: results.accountAgeData,
-        hashtagInsights: results.hashtagInsights
+        hashtagInsights: results.hashtagInsights,
+        googleFactResponse: results.googleFactResponse
       });
     }).catch(error => {
       console.error('OctoPal: Error analyzing page', error);
@@ -66,7 +67,8 @@ async function analyzeCurrentPage() {
       hashtagPatternScore: 0,
       detectedPatterns: [],
       accountAgeData: [],
-      hashtagInsights: []
+      hashtagInsights: [],
+      googleFactResponse: "Fact-Checking by Google FactCheck"
     };
   }
   
@@ -92,7 +94,7 @@ async function analyzeCurrentPage() {
     
     // Analyze for bot-like patterns
     const botScore = analyzeTweetForBotPatterns(tweet);
-    
+
     // Get account age data
     const username = getUsernameFromTweet(tweet);
     const userId = extractUserIdFromUsername(username);
@@ -111,6 +113,21 @@ async function analyzeCurrentPage() {
     
     // Analyze for misinformation patterns
     const misinfoScore = analyzeTweetForMisinformation(tweet);
+
+    googleFactResponse = "";
+    tweetText = getTweetText(tweet);
+    // Send GET request with the string as a query parameter
+    fetch(`http://127.0.0.1:5000/call-python?input=${encodeURIComponent(tweetText)}`)
+    .then(response => response.json())
+    .then(data => {
+      googleFactResponse = data.result;
+    })
+    .catch(error => {
+      console.error('Error calling Python function:', error);
+    });
+    
+    console.log('The result is', googleFactResponse);
+    
     
     // Analyze for posting frequency patterns
     const { score: postingFrequencyScore, pattern } = analyzePostingFrequency(tweet);
@@ -153,7 +170,8 @@ async function analyzeCurrentPage() {
     hashtagPatternScore,
     detectedPatterns: uniquePatterns.slice(0, 5), // Limit to top 5 patterns
     accountAgeData: accountAgeData.slice(0, 3), // Limit to top 3 accounts
-    hashtagInsights: uniqueHashtagInsights.slice(0, 3) // Limit to top 3 hashtag insights
+    hashtagInsights: uniqueHashtagInsights.slice(0, 3), // Limit to top 3 hashtag insights
+    googleFactResponse: googleFactResponse || "Fact-Checking by Google FactCheck"
   };
 }
 
@@ -553,6 +571,18 @@ function analyzeTweetForMisinformation(tweetElement) {
   if (!tweetTextElement) return Math.floor(Math.random() * 30); // Return random score if no text
   
   const tweetText = tweetTextElement.textContent || '';
+
+  // Send GET request with the string as a query parameter
+  fetch(`http://127.0.0.1:5000/call-python?input=${encodeURIComponent(tweetText)}`)
+  .then(response => response.json())
+  .then(data => {
+    console.log('The result is', data.result);
+  })
+  .catch(error => {
+    console.error('Error calling Python function:', error);
+  });
+
+
   
   // 1. Check for excessive capitalization (often used in misleading content)
   const uppercaseRatio = (tweetText.replace(/[^A-Z]/g, '').length) / 

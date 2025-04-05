@@ -10,6 +10,8 @@ const shareButton = document.getElementById('share-button');
 const rewardsBox = document.getElementById('rewards-box');
 const tabs = document.querySelectorAll('.tab');
 const contentSections = document.querySelectorAll('#leaderboard, #badges, #challenges');
+const googleFactCheck = document.getElementById('google_factcheck');
+
 
 // When popup opens, get current tab and analyze
 document.addEventListener('DOMContentLoaded', refreshUI);
@@ -29,7 +31,8 @@ function refreshUI() {
             response.hashtagPatternScore,
             response.detectedPatterns,
             response.accountAgeData,
-            response.hashtagInsights
+            response.hashtagInsights,
+            response.googleFactResponse
           );
         } else {
           showError();
@@ -82,10 +85,12 @@ function setupTabs() {
 }
 
 // Update UI with scores
-function updateUI(botScore, misinfoScore, postingFrequencyScore, hashtagPatternScore, detectedPatterns, accountAgeData, hashtagInsights) {
+function updateUI(botScore, misinfoScore, postingFrequencyScore, hashtagPatternScore, detectedPatterns, accountAgeData, hashtagInsights, googleFactResponse) {
   // Update bot likelihood
   botLikelihoodBar.style.width = botScore + '%';
   botLikelihoodValue.textContent = botScore + '% likelihood of bot activity';
+
+  googleFactCheck.textContent = googleFactResponse;
   
   // Set color based on risk level
   if (botScore < 30) {
