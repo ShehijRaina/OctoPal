@@ -25,11 +25,20 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         detectedPatterns: results.detectedPatterns,
         accountAgeData: results.accountAgeData,
         hashtagInsights: results.hashtagInsights,
+        languagePatterns: results.languagePatterns,
+        passiveVoiceExamples: results.passiveVoiceExamples,
+        sourceCredibilityScore: results.sourceCredibilityScore,
+        sourceDetails: results.sourceDetails,
         googleFactResponse: results.googleFactResponse
       });
     }).catch(error => {
       console.error('OctoPal: Error analyzing page', error);
-      sendResponse({success: false});
+      // Send a more descriptive error message
+      sendResponse({
+        success: false, 
+        error: error.message || 'Unknown error occurred while analyzing the page',
+        errorStack: error.stack
+      });
     });
     
     // Return true to indicate we'll respond asynchronously
@@ -57,6 +66,13 @@ async function analyzeCurrentPage() {
   let detectedPatterns = [];
   let accountAgeData = [];
   let hashtagInsights = [];
+  let languagePatterns = [];
+  let passiveVoiceExamples = [];
+  let googleFactResponse = "Fact-Checking by Google FactCheck";
+  let sourceCredibilityScoreTotal = 0;
+  let sourceDetails = [];
+  let sourcesFound = false;
+  let sourceCount = 0;
   
   // If no tweets found, return default scores
   if (tweetElements.length === 0) {
@@ -68,6 +84,10 @@ async function analyzeCurrentPage() {
       detectedPatterns: [],
       accountAgeData: [],
       hashtagInsights: [],
+      languagePatterns: [],
+      passiveVoiceExamples: [],
+      sourceCredibilityScore: 50,
+      sourceDetails: [],
       googleFactResponse: "Fact-Checking by Google FactCheck"
     };
   }
@@ -89,12 +109,33 @@ async function analyzeCurrentPage() {
       hashtagPatternScoreTotal += cachedAnalysis.hashtagPatternScore || 0;
       if (cachedAnalysis.pattern) detectedPatterns.push(cachedAnalysis.pattern);
       if (cachedAnalysis.hashtagInsight) hashtagInsights.push(cachedAnalysis.hashtagInsight);
+      if (cachedAnalysis.languagePatterns) {
+        cachedAnalysis.languagePatterns.forEach(pattern => languagePatterns.push(pattern));
+      }
+      if (cachedAnalysis.passiveVoiceExamples && cachedAnalysis.passiveVoiceExamples.length > 0) {
+        cachedAnalysis.passiveVoiceExamples.forEach(example => passiveVoiceExamples.push(example));
+      }
+      if (cachedAnalysis.sourceCredibilityScore) {
+        sourceCredibilityScoreTotal += cachedAnalysis.sourceCredibilityScore;
+        sourceCount++;
+      }
+      if (cachedAnalysis.sourceDetails && cachedAnalysis.sourceDetails.length > 0) {
+        cachedAnalysis.sourceDetails.forEach(source => {
+          // Add source if not already in the list
+          if (!sourceDetails.some(s => s.domain === source.domain)) {
+            sourceDetails.push(source);
+          }
+        });
+        if (!sourcesFound && cachedAnalysis.sourceDetails.length > 0) {
+          sourcesFound = true;
+        }
+      }
       continue;
     }
     
     // Analyze for bot-like patterns
     const botScore = analyzeTweetForBotPatterns(tweet);
-
+    
     // Get account age data
     const username = getUsernameFromTweet(tweet);
     const userId = extractUserIdFromUsername(username);
@@ -112,22 +153,67 @@ async function analyzeCurrentPage() {
     }
     
     // Analyze for misinformation patterns
-    const misinfoScore = analyzeTweetForMisinformation(tweet);
+    const misinfoResult = analyzeTweetForMisinformation(tweet);
+    const misinfoScore = misinfoResult.score;
+    
+    // Add detected language patterns to the collection
+    if (misinfoResult.patterns && misinfoResult.patterns.length > 0) {
+      misinfoResult.patterns.forEach(pattern => languagePatterns.push(pattern));
+    }
+    
+    // Add passive voice examples
+    if (misinfoResult.passiveExamples && misinfoResult.passiveExamples.length > 0) {
+      misinfoResult.passiveExamples.forEach(example => passiveVoiceExamples.push(example));
+    }
 
-    googleFactResponse = "";
-    tweetText = getTweetText(tweet);
-    // Send GET request with the string as a query parameter
-    fetch(`http://127.0.0.1:5000/call-python?input=${encodeURIComponent(tweetText)}`)
-    .then(response => response.json())
-    .then(data => {
-      googleFactResponse = data.result;
-    })
-    .catch(error => {
-      console.error('Error calling Python function:', error);
-    });
+    // Analyze sources and their credibility
+    const sourceAnalysis = analyzeSourcesInTweet(tweet);
+    let tweetSourceCredibilityScore = 50; // Default neutral score
+    let tweetSourceDetails = [];
     
-    console.log('The result is', googleFactResponse);
+    if (sourceAnalysis.sourcesFound) {
+      tweetSourceCredibilityScore = sourceAnalysis.credibilityScore;
+      tweetSourceDetails = sourceAnalysis.sourceDetails;
+      sourceCredibilityScoreTotal += tweetSourceCredibilityScore;
+      sourceCount++;
+      
+      // Add source details if unique
+      tweetSourceDetails.forEach(source => {
+        if (!sourceDetails.some(s => s.domain === source.domain)) {
+          sourceDetails.push(source);
+        }
+      });
+      
+      if (!sourcesFound && tweetSourceDetails.length > 0) {
+        sourcesFound = true;
+      }
+    }
+
+    const tweetText = getTweetText(tweet);
     
+    // Try to get fact-checking data, but don't block if the server isn't responding
+    try {
+      // Safely check for fact-checking data with a timeout
+      const factCheckData = await Promise.race([
+        fetch(`http://127.0.0.1:5000/call-python?input=${encodeURIComponent(tweetText)}`)
+          .then(response => {
+            if (!response.ok) {
+              throw new Error('Network response was not ok');
+            }
+            return response.json();
+          }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Fact-check request timeout')), 1500)
+        )
+      ]);
+      
+      if (factCheckData && factCheckData.result) {
+        googleFactResponse = factCheckData.result;
+      }
+    } catch (error) {
+      console.log('Fact-checking API not available:', error.message);
+      // Continue without fact-checking data
+    }
     
     // Analyze for posting frequency patterns
     const { score: postingFrequencyScore, pattern } = analyzePostingFrequency(tweet);
@@ -142,7 +228,11 @@ async function analyzeCurrentPage() {
       postingFrequencyScore,
       hashtagPatternScore,
       pattern: pattern ? pattern : null,
-      hashtagInsight: hashtagInsight ? hashtagInsight : null
+      hashtagInsight: hashtagInsight ? hashtagInsight : null,
+      languagePatterns: misinfoResult.patterns || [],
+      passiveVoiceExamples: misinfoResult.passiveExamples || [],
+      sourceCredibilityScore: tweetSourceCredibilityScore,
+      sourceDetails: tweetSourceDetails
     });
     
     botScoreTotal += botScore;
@@ -159,9 +249,18 @@ async function analyzeCurrentPage() {
   const postingFrequencyScore = Math.min(Math.round(postingFrequencyScoreTotal / tweetElements.length), 100);
   const hashtagPatternScore = Math.min(Math.round(hashtagPatternScoreTotal / tweetElements.length), 100);
   
+  // Calculate source credibility score
+  const sourceCredibilityScore = sourcesFound && sourceCount > 0 ? 
+    Math.min(Math.round(sourceCredibilityScoreTotal / sourceCount), 100) : 50;
+  
   // Filter out duplicate patterns and insights
   const uniquePatterns = [...new Set(detectedPatterns)];
   const uniqueHashtagInsights = [...new Set(hashtagInsights)];
+  const uniqueLanguagePatterns = [...new Set(languagePatterns)];
+  const uniquePassiveExamples = [...new Set(passiveVoiceExamples)];
+  
+  // Sort source details by credibility score (highest first)
+  sourceDetails.sort((a, b) => b.score - a.score);
   
   return {
     botScore,
@@ -171,7 +270,11 @@ async function analyzeCurrentPage() {
     detectedPatterns: uniquePatterns.slice(0, 5), // Limit to top 5 patterns
     accountAgeData: accountAgeData.slice(0, 3), // Limit to top 3 accounts
     hashtagInsights: uniqueHashtagInsights.slice(0, 3), // Limit to top 3 hashtag insights
-    googleFactResponse: googleFactResponse || "Fact-Checking by Google FactCheck"
+    languagePatterns: uniqueLanguagePatterns.slice(0, 5), // Limit to top 5 language patterns
+    passiveVoiceExamples: uniquePassiveExamples.slice(0, 3), // Limit to top 3 passive voice examples
+    sourceCredibilityScore, // Source credibility score
+    sourceDetails: sourceDetails.slice(0, 5), // Limit to top 5 sources
+    googleFactResponse: googleFactResponse
   };
 }
 
@@ -297,18 +400,35 @@ function extractHashtags(text) {
 
 // Get tweet text
 function getTweetText(tweetElement) {
-  const tweetTextElement = tweetElement.querySelector('[data-testid="tweetText"]');
-  return tweetTextElement ? tweetTextElement.textContent : '';
+  // Try multiple possible selectors for tweet text
+  const tweetTextElement = 
+    tweetElement.querySelector('[data-testid="tweetText"]') || 
+    tweetElement.querySelector('.css-901oao') || // Common Twitter text class
+    tweetElement.querySelector('[lang]'); // Text elements often have lang attribute
+  
+  return tweetTextElement ? tweetTextElement.textContent.trim() : '';
 }
 
 // Get a unique identifier for a tweet
 function getTweetId(tweetElement) {
-  // Try to find a data attribute with the tweet ID
+  // Try multiple methods to get a tweet ID
+  
+  // Method 1: Try to find a data attribute with the tweet ID
   const tweetLink = tweetElement.querySelector('a[href*="/status/"]');
   if (tweetLink) {
     const href = tweetLink.getAttribute('href');
     const match = href.match(/\/status\/(\d+)/);
     if (match && match[1]) return match[1];
+  }
+  
+  // Method 2: Try to find data-tweet-id attribute
+  const tweetId = tweetElement.getAttribute('data-tweet-id');
+  if (tweetId) return tweetId;
+  
+  // Method 3: Fallback to using time element's datetime
+  const timeElement = tweetElement.querySelector('time');
+  if (timeElement && timeElement.getAttribute('datetime')) {
+    return `time-${timeElement.getAttribute('datetime')}`;
   }
   
   // Fallback: use a combination of username and text content
@@ -319,12 +439,23 @@ function getTweetId(tweetElement) {
 
 // Extract username from tweet
 function getUsernameFromTweet(tweetElement) {
-  const usernameElement = tweetElement.querySelector('[data-testid="User-Name"]');
+  // Try multiple selectors for username
+  const usernameElement = 
+    tweetElement.querySelector('[data-testid="User-Name"]') || 
+    tweetElement.querySelector('a[role="link"][href^="/"]');
+  
   if (usernameElement) {
     const usernameText = usernameElement.textContent || '';
     // Usually usernames are in the format "Name @username"
     const usernameMatch = usernameText.match(/@(\w+)/);
     if (usernameMatch && usernameMatch[1]) return usernameMatch[1];
+    
+    // If no @ format found, try to extract from href
+    if (usernameElement.getAttribute('href')) {
+      const hrefMatch = usernameElement.getAttribute('href').match(/^\/([^/]+)/);
+      if (hrefMatch && hrefMatch[1] && hrefMatch[1] !== 'search') return hrefMatch[1];
+    }
+    
     return usernameText;
   }
   return 'unknown';
@@ -565,36 +696,28 @@ function analyzePostingFrequency(tweetElement) {
 // Enhanced misinformation detection logic
 function analyzeTweetForMisinformation(tweetElement) {
   let score = 0;
+  let detectedPatterns = [];
+  let passiveInstances = [];
   
   // Get the tweet text content
   const tweetTextElement = tweetElement.querySelector('[data-testid="tweetText"]');
-  if (!tweetTextElement) return Math.floor(Math.random() * 30); // Return random score if no text
+  if (!tweetTextElement) return { score: Math.floor(Math.random() * 30), patterns: [], passiveExamples: [] }; // Return random score if no text
   
   const tweetText = tweetTextElement.textContent || '';
 
-  // Send GET request with the string as a query parameter
-  fetch(`http://127.0.0.1:5000/call-python?input=${encodeURIComponent(tweetText)}`)
-  .then(response => response.json())
-  .then(data => {
-    console.log('The result is', data.result);
-  })
-  .catch(error => {
-    console.error('Error calling Python function:', error);
-  });
-
-
-  
   // 1. Check for excessive capitalization (often used in misleading content)
   const uppercaseRatio = (tweetText.replace(/[^A-Z]/g, '').length) / 
                           (tweetText.replace(/[^A-Za-z]/g, '').length || 1);
   if (uppercaseRatio > 0.3) {
     score += 20;
+    detectedPatterns.push("Excessive capitalization");
   }
   
   // 2. Check for excessive exclamation marks
   const exclamationCount = (tweetText.match(/!/g) || []).length;
   if (exclamationCount > 2) {
     score += 15;
+    detectedPatterns.push("Multiple exclamation marks");
   }
   
   // 3. Check for keywords often associated with misinformation
@@ -626,19 +749,27 @@ function analyzeTweetForMisinformation(tweetElement) {
   ];
   
   let keywordFound = false;
+  let keywordDetected = "";
   misinfoKeywords.forEach(keyword => {
     if (!keywordFound && tweetText.toLowerCase().includes(keyword)) {
       score += 15;
       keywordFound = true;
+      keywordDetected = keyword;
     }
   });
+  
+  if (keywordFound) {
+    detectedPatterns.push(`Misinformation keyword: "${keywordDetected}"`);
+  }
   
   // 4. Check for many hashtags (sometimes indicates spam/misinfo campaigns)
   const hashtagCount = (tweetText.match(/#\w+/g) || []).length;
   if (hashtagCount > 5) {
     score += 20;
+    detectedPatterns.push("Excessive hashtag use");
   } else if (hashtagCount > 3) {
     score += 10;
+    detectedPatterns.push("Multiple hashtags");
   }
   
   // 5. Check for suspicious links
@@ -650,6 +781,7 @@ function analyzeTweetForMisinformation(tweetElement) {
   ];
   
   let suspiciousLinkFound = false;
+  let suspiciousDomain = "";
   linkElements.forEach(link => {
     if (suspiciousLinkFound) return;
     
@@ -660,10 +792,15 @@ function analyzeTweetForMisinformation(tweetElement) {
       if (href.includes(domain)) {
         score += 15;
         suspiciousLinkFound = true;
+        suspiciousDomain = domain;
         break;
       }
     }
   });
+  
+  if (suspiciousLinkFound) {
+    detectedPatterns.push(`Suspicious link: ${suspiciousDomain}`);
+  }
   
   // 6. Check for sensationalist phrases
   const sensationalistPhrases = [
@@ -674,12 +811,18 @@ function analyzeTweetForMisinformation(tweetElement) {
   ];
   
   let sensationalistPhraseFound = false;
+  let sensationalistPhraseDetected = "";
   sensationalistPhrases.forEach(phrase => {
     if (!sensationalistPhraseFound && tweetText.toLowerCase().includes(phrase)) {
       score += 10;
       sensationalistPhraseFound = true;
+      sensationalistPhraseDetected = phrase;
     }
   });
+  
+  if (sensationalistPhraseFound) {
+    detectedPatterns.push(`Sensationalist language: "${sensationalistPhraseDetected}"`);
+  }
   
   // 7. Check for overgeneralizations
   const overgeneralizationPhrases = [
@@ -689,17 +832,216 @@ function analyzeTweetForMisinformation(tweetElement) {
   ];
   
   let overgeneralizationFound = false;
+  let overgeneralizationDetected = "";
   overgeneralizationPhrases.forEach(phrase => {
     if (!overgeneralizationFound && tweetText.toLowerCase().includes(phrase)) {
       score += 10;
       overgeneralizationFound = true;
+      overgeneralizationDetected = phrase;
     }
   });
+  
+  if (overgeneralizationFound) {
+    detectedPatterns.push(`Overgeneralization: "${overgeneralizationDetected}"`);
+  }
+  
+  // 8. NEW: Check for sentence structures common in misinformation
+  const sentences = tweetText.split(/[.!?]+/).filter(sentence => sentence.trim().length > 0);
+  
+  // 8.1 Check for "they don't want you to know" structure
+  const conspiracyStructures = [
+    /they (don't|won't|do not|won't) (want|allow) (you|us|people|the public) to (know|see|find out|discover)/i,
+    /what they (don't|won't|do not|won't) (want|allow) (you|us|people|the public) to (know|see|find out|discover)/i,
+    /(they are|they're) (hiding|concealing|suppressing) (this|it|the truth|the facts)/i,
+    /(they|mainstream media|government) (is|are) (lying|hiding|covering up)/i,
+    /the (truth about|real story on|facts about) (this|it) (is|are) being (suppressed|hidden|censored)/i
+  ];
+  
+  for (const sentence of sentences) {
+    for (const pattern of conspiracyStructures) {
+      if (pattern.test(sentence)) {
+        score += 20;
+        detectedPatterns.push("Conspiracy theory sentence structure");
+        break;
+      }
+    }
+  }
+  
+  // 8.2 Check for false authority claims
+  const falseAuthorityStructures = [
+    /according to (our research|my research|independent researchers|experts who disagree)/i,
+    /(many|most) (doctors|scientists|experts) (don't|won't) tell you/i,
+    /(undeniable|irrefutable) (evidence|proof) (shows|proves|confirms)/i,
+    /what (doctors|scientists|experts) (don't|won't) tell you/i,
+    /studies that (they|mainstream media|government) (ignore|suppress|hide)/i
+  ];
+  
+  for (const sentence of sentences) {
+    for (const pattern of falseAuthorityStructures) {
+      if (pattern.test(sentence)) {
+        score += 15;
+        detectedPatterns.push("False authority claim");
+        break;
+      }
+    }
+  }
+  
+  // 8.3 Check for fear-inducing structures
+  const fearStructures = [
+    /if (you|we) don't (act|do something|wake up) (now|immediately|soon)/i,
+    /(they|it) will (destroy|kill|end|ruin) (us|you|everything|our country)/i,
+    /(time is|we're) running out/i,
+    /before it('s| is) too late/i,
+    /the (end|destruction) of (our|your) (freedom|rights|liberty|way of life)/i
+  ];
+  
+  for (const sentence of sentences) {
+    for (const pattern of fearStructures) {
+      if (pattern.test(sentence)) {
+        score += 15;
+        detectedPatterns.push("Fear-inducing sentence structure");
+        break;
+      }
+    }
+  }
+  
+  // 8.4 Check for false dichotomy structures
+  const falseDichotomyStructures = [
+    /(either|it's either) (.*?) or (.*?)/i,
+    /there (are|is) only two (choices|options|possibilities)/i,
+    /you('re| are) either with (us|me) or against (us|me)/i,
+    /if you('re| are) not (.*?), then you('re| are) (.*?)/i
+  ];
+  
+  for (const sentence of sentences) {
+    for (const pattern of falseDichotomyStructures) {
+      if (pattern.test(sentence)) {
+        score += 10;
+        detectedPatterns.push("False dichotomy structure");
+        break;
+      }
+    }
+  }
+  
+  // 8.5 Check for passive voice hiding agency
+  const passiveStructures = [
+    /(was|were) (forced|made|told|ordered|instructed) to/i,
+    /has been (hidden|suppressed|covered up|removed)/i,
+    /(is|are|was|were) being (censored|silenced|hidden|manipulated)/i,
+    /have been (lied to|misled|deceived)/i
+  ];
+  
+  // Enhanced passive voice detection with more patterns
+  const enhancedPassivePatterns = [
+    // Basic passive constructions (be + past participle)
+    /(is|are|was|were|be|been|being) (made|done|taken|given|shown|found|seen|called|known|used|left|kept|held|brought|set|put|sent|said|read|written)/i,
+    
+    // Extended participles with agency obscured
+    /(is|are|was|were) (determined|reported|believed|understood|assumed|thought|alleged|claimed|suggested|acknowledged|decided)/i,
+    
+    // Passive with "by" where the agent is vague or institutional
+    /(is|are|was|were|has been|have been) \w+ed by (some|many|most|authorities|officials|sources|experts|studies|research|the government|the media)/i,
+    
+    // "It is/was" constructions that hide agency
+    /it (is|was) (decided|determined|reported|believed|understood|assumed|thought|suggested|noted|claimed|alleged|said|revealed|shown|found)/i,
+    
+    // Patterns with "to be" + participle
+    /to be (considered|regarded|viewed|treated|seen|perceived|recognized|acknowledged)/i,
+    
+    // Get/Have/Make + participle patterns
+    /(get|got|getting|gets) \w+ed/i,
+    
+    // Modal + be + participle
+    /(can|could|may|might|must|should|will|would) be \w+ed/i,
+    
+    // Specifically target responsibility-avoiding phrases
+    /mistakes were made/i,
+    /errors occurred/i,
+    /policies were implemented/i,
+    /decisions were taken/i,
+    /changes have been made/i,
+    /actions were authorized/i,
+    /information was withheld/i
+  ];
+  
+  let passiveCount = 0;
+  
+  for (const sentence of sentences) {
+    // Check original passive patterns
+    let passiveFound = false;
+    for (const pattern of passiveStructures) {
+      if (pattern.test(sentence)) {
+        passiveCount++;
+        passiveInstances.push(sentence.trim());
+        passiveFound = true;
+        break;
+      }
+    }
+    
+    // Check enhanced passive patterns
+    if (!passiveFound) { // Skip if already detected
+      for (const pattern of enhancedPassivePatterns) {
+        if (pattern.test(sentence)) {
+          passiveCount++;
+          passiveInstances.push(sentence.trim());
+          break;
+        }
+      }
+    }
+  }
+  
+  // Calculate percentage of sentences using passive voice
+  const passivePercentage = sentences.length > 0 ? (passiveCount / sentences.length) * 100 : 0;
+  
+  // Add scores based on both absolute count and percentage
+  if (passiveCount >= 3 || passivePercentage >= 50) {
+    score += 25;
+    detectedPatterns.push(`Excessive passive voice (${passiveCount} instances, ${Math.round(passivePercentage)}% of text)`);
+  } else if (passiveCount >= 2 || passivePercentage >= 30) {
+    score += 15;
+    detectedPatterns.push(`Significant passive voice use (${passiveCount} instances)`);
+  } else if (passiveCount === 1 && sentences.length <= 3) {
+    // Only flag as suspicious if it's a short text with passive voice
+    score += 10;
+    detectedPatterns.push("Passive voice hiding agency");
+  }
+  
+  // 8.6 Check for rhetorical questions used manipulatively
+  const rhetoricalQuestionStructures = [
+    /why (aren't|don't|isn't|doesn't) (they|the media|the government|people)/i,
+    /have you (ever (wondered|considered|thought)|been told)/i,
+    /isn't it (strange|odd|curious|interesting|suspicious) that/i,
+    /what if (everything|what) you (know|believe|were told) (is|was) (wrong|a lie|false)/i,
+    /who (really|actually) (benefits|profits|gains) from/i,
+    /how (can|could) (they|we|anyone) (possibly|really|actually)/i
+  ];
+  
+  let rhetoricalCount = 0;
+  for (const sentence of sentences) {
+    for (const pattern of rhetoricalQuestionStructures) {
+      if (pattern.test(sentence)) {
+        rhetoricalCount++;
+        break;
+      }
+    }
+  }
+  
+  if (rhetoricalCount >= 2) {
+    score += 20;
+    detectedPatterns.push("Multiple rhetorical questions (manipulation tactic)");
+  } else if (rhetoricalCount === 1) {
+    score += 10;
+    detectedPatterns.push("Rhetorical question pattern");
+  }
   
   // Add some randomness for demonstration (smaller range)
   score += Math.floor(Math.random() * 10);
   
-  return Math.min(score, 100);
+  return {
+    score: Math.min(score, 100),
+    patterns: detectedPatterns.slice(0, 3), // Return top 3 patterns
+    passiveExamples: passiveInstances.length > 0 ? passiveInstances.slice(0, 3) : [] // Include up to 3 examples of passive voice
+  };
 }
 
 // Extract user ID from username
@@ -832,4 +1174,175 @@ function checkForUnrelatedHashtags(hashtags) {
   }
   
   return categoriesFound.size;
+}
+
+// Extract domain from a URL
+function extractDomain(url) {
+  try {
+    // Handle relative URLs (Twitter often uses these)
+    if (url.startsWith('/')) {
+      return 'twitter.com';
+    }
+    
+    // Use URL API to parse URL
+    const urlObj = new URL(url);
+    let domain = urlObj.hostname;
+    
+    // Remove www. prefix if present
+    if (domain.startsWith('www.')) {
+      domain = domain.substring(4);
+    }
+    
+    return domain;
+  } catch (e) {
+    // If URL parsing fails, try a simple regex match
+    const match = url.match(/^(?:https?:\/\/)?(?:www\.)?([^\/]+)/i);
+    if (match && match[1]) {
+      return match[1];
+    }
+    
+    // If all else fails, return the original URL
+    return url;
+  }
+}
+
+// Score domain credibility
+function scoreDomainCredibility(domain) {
+  // Database of known domains and their credibility scores (0-100)
+  const credibilityDatabase = {
+    // High credibility news sources (80-100)
+    'reuters.com': { score: 95, category: 'Established News Agency', description: 'International news organization known for factual reporting' },
+    'apnews.com': { score: 95, category: 'Established News Agency', description: 'Associated Press - nonprofit news cooperative' },
+    'bbc.com': { score: 90, category: 'Public Broadcasting', description: 'British public service broadcaster' },
+    'bbc.co.uk': { score: 90, category: 'Public Broadcasting', description: 'British public service broadcaster' },
+    'npr.org': { score: 88, category: 'Public Broadcasting', description: 'Nonprofit media organization' },
+    'nytimes.com': { score: 85, category: 'Established Newspaper', description: 'Major American newspaper' },
+    'washingtonpost.com': { score: 85, category: 'Established Newspaper', description: 'Major American newspaper' },
+    'wsj.com': { score: 85, category: 'Established Newspaper', description: 'Wall Street Journal - business-focused daily newspaper' },
+    'economist.com': { score: 88, category: 'Established Magazine', description: 'Weekly newspaper focusing on current affairs, business and politics' },
+    'nature.com': { score: 95, category: 'Scientific Journal', description: 'Prestigious scientific journal' },
+    'science.org': { score: 95, category: 'Scientific Journal', description: 'Prestigious scientific journal' },
+    'nejm.org': { score: 95, category: 'Scientific Journal', description: 'New England Journal of Medicine - peer-reviewed medical journal' },
+    'pnas.org': { score: 90, category: 'Scientific Journal', description: 'Proceedings of the National Academy of Sciences - peer-reviewed journal' },
+    'who.int': { score: 90, category: 'International Organization', description: 'World Health Organization' },
+    'un.org': { score: 85, category: 'International Organization', description: 'United Nations' },
+    'europa.eu': { score: 85, category: 'Government', description: 'European Union official website' },
+    'cdc.gov': { score: 90, category: 'Government', description: 'Centers for Disease Control and Prevention' },
+    'nih.gov': { score: 90, category: 'Government', description: 'National Institutes of Health' },
+    'nasa.gov': { score: 90, category: 'Government', description: 'National Aeronautics and Space Administration' },
+    'noaa.gov': { score: 90, category: 'Government', description: 'National Oceanic and Atmospheric Administration' },
+    
+    // Medium credibility sources (50-79)
+    'foxnews.com': { score: 65, category: 'Cable News', description: 'American conservative cable news channel' },
+    'cnn.com': { score: 70, category: 'Cable News', description: 'American cable news channel' },
+    'usatoday.com': { score: 75, category: 'Established Newspaper', description: 'American daily newspaper' },
+    'thehill.com': { score: 75, category: 'Political News', description: 'Political reporting focused on Congress, lobbying and politics' },
+    'politico.com': { score: 75, category: 'Political News', description: 'Political journalism organization' },
+    'time.com': { score: 78, category: 'Established Magazine', description: 'News magazine and website' },
+    'forbes.com': { score: 72, category: 'Business Magazine', description: 'American business magazine' },
+    'bloomberg.com': { score: 80, category: 'Business News', description: 'Financial, software, data, and media company' },
+    'businessinsider.com': { score: 68, category: 'Business News', description: 'American financial and business news website' },
+    'independent.co.uk': { score: 75, category: 'Established Newspaper', description: 'British online newspaper' },
+    'theguardian.com': { score: 80, category: 'Established Newspaper', description: 'British daily newspaper' },
+    'huffpost.com': { score: 65, category: 'Online News', description: 'American news aggregator and blog' },
+    'medium.com': { score: 50, category: 'User-Generated Content', description: 'Online publishing platform' },
+    
+    // Low credibility sources (0-49)
+    'breitbart.com': { score: 35, category: 'Partisan News', description: 'American far-right news site' },
+    'dailymail.co.uk': { score: 40, category: 'Tabloid', description: 'British tabloid newspaper' },
+    'thesun.co.uk': { score: 35, category: 'Tabloid', description: 'British tabloid newspaper' },
+    'nypost.com': { score: 45, category: 'Tabloid', description: 'American newspaper' },
+    'rt.com': { score: 30, category: 'State-Controlled Media', description: 'Russian state-controlled broadcaster' },
+    'sputniknews.com': { score: 30, category: 'State-Controlled Media', description: 'Russian state-owned news agency' },
+    'infowars.com': { score: 15, category: 'Conspiracy', description: 'American far-right conspiracy theory and fake news website' },
+    'naturalnews.com': { score: 20, category: 'Pseudoscience', description: 'Website promoting health conspiracies' },
+    'zerohedge.com': { score: 30, category: 'Conspiracy', description: 'Financial blog that promotes conspiracy theories' },
+    'beforeitsnews.com': { score: 10, category: 'Conspiracy', description: 'User-generated conspiracy website' },
+    'theepochtimes.com': { score: 35, category: 'Partisan News', description: 'Far-right media organization' },
+    'oann.com': { score: 30, category: 'Partisan News', description: 'One America News Network - far-right news channel' },
+    'newsmax.com': { score: 35, category: 'Partisan News', description: 'Conservative news media organization' },
+    
+    // URL shorteners and social media (considered suspicious due to obscuring the real source)
+    'bit.ly': { score: 30, category: 'URL Shortener', description: 'Hides actual source URL' },
+    'tinyurl.com': { score: 30, category: 'URL Shortener', description: 'Hides actual source URL' },
+    'goo.gl': { score: 30, category: 'URL Shortener', description: 'Hides actual source URL' },
+    't.co': { score: 40, category: 'Twitter URL Shortener', description: 'Twitter\'s URL shortener' },
+    'twitter.com': { score: 50, category: 'Social Media', description: 'Social media platform' },
+    'x.com': { score: 50, category: 'Social Media', description: 'Social media platform' },
+    'facebook.com': { score: 45, category: 'Social Media', description: 'Social media platform' },
+    'instagram.com': { score: 45, category: 'Social Media', description: 'Social media platform' },
+    'tiktok.com': { score: 40, category: 'Social Media', description: 'Social media platform' },
+    'youtube.com': { score: 50, category: 'Video Sharing', description: 'Video sharing platform' },
+    'youtu.be': { score: 50, category: 'Video Sharing', description: 'YouTube URL shortener' },
+    'reddit.com': { score: 45, category: 'Social Media', description: 'Social news aggregation and discussion website' }
+  };
+  
+  // Check if the domain exists in our database
+  if (credibilityDatabase[domain]) {
+    return credibilityDatabase[domain];
+  }
+  
+  // Check for domain endings
+  if (domain.endsWith('.edu')) {
+    return { score: 80, category: 'Educational Institution', description: 'Educational domain' };
+  } else if (domain.endsWith('.gov')) {
+    return { score: 80, category: 'Government', description: 'Government domain' };
+  } else if (domain.endsWith('.org')) {
+    return { score: 65, category: 'Organization', description: 'Organization domain - varying credibility' };
+  }
+  
+  // If not found, return a default unknown score
+  return { score: 40, category: 'Unknown', description: 'Unverified source' };
+}
+
+// Analyze sources in a tweet
+function analyzeSourcesInTweet(tweetElement) {
+  // Collect all links in the tweet
+  const linkElements = tweetElement.querySelectorAll('a[href]');
+  if (linkElements.length === 0) {
+    return {
+      sourcesFound: false,
+      credibilityScore: 50, // Neutral score if no sources
+      sourceDetails: []
+    };
+  }
+  
+  let totalScore = 0;
+  const sourceDetails = [];
+  let sourcesFound = false;
+  
+  // Process each link
+  linkElements.forEach(link => {
+    const href = link.getAttribute('href');
+    if (!href) return;
+    
+    // Skip profile links and hashtags
+    if (href.startsWith('/') && !href.includes('/status/')) {
+      return;
+    }
+    
+    // Extract domain and score it
+    const domain = extractDomain(href);
+    const credibilityInfo = scoreDomainCredibility(domain);
+    
+    // Add to source details
+    sourceDetails.push({
+      domain: domain,
+      url: href,
+      ...credibilityInfo
+    });
+    
+    // Update total score
+    totalScore += credibilityInfo.score;
+    sourcesFound = true;
+  });
+  
+  // Calculate average score if sources were found
+  const credibilityScore = sourcesFound ? Math.round(totalScore / sourceDetails.length) : 50;
+  
+  return {
+    sourcesFound,
+    credibilityScore,
+    sourceDetails
+  };
 } 

@@ -285,6 +285,106 @@
       margin-right: 5px;
     }
     
+    /* Language pattern analysis styles */
+    #language-patterns {
+      margin-top: 15px;
+      padding: 10px;
+      background-color: #f8f8f8;
+      border-radius: 6px;
+      display: none;
+      border-left: 3px solid #ff3838;
+    }
+    
+    #language-patterns h4 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      color: #0b55e8;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+    }
+    
+    #language-patterns h4 .icon {
+      color: #ff3838;
+    }
+    
+    .language-patterns-list {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 13px;
+    }
+    
+    .language-patterns-list li {
+      margin-bottom: 8px;
+      line-height: 1.4;
+      display: flex;
+      align-items: center;
+    }
+    
+    .language-patterns-list li:before {
+      content: "⚠️";
+      margin-right: 5px;
+      flex-shrink: 0;
+    }
+    
+    .pattern-tip {
+      font-size: 12px;
+      color: #555;
+      font-style: italic;
+      margin-top: 5px;
+      padding-left: 20px;
+    }
+    
+    /* Passive Voice Container */
+    #passive-voice-container {
+      margin-top: 15px;
+      padding: 12px;
+      background-color: #fff0f0;
+      border-radius: 6px;
+      display: none;
+      border-left: 3px solid #ff6b6b;
+    }
+    
+    #passive-voice-container h4 {
+      margin-top: 0;
+      margin-bottom: 8px;
+      color: #e83a3a;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+    }
+    
+    #passive-voice-container h4 .icon {
+      margin-right: 8px;
+    }
+    
+    .passive-examples-list {
+      margin: 0;
+      padding-left: 5px;
+      font-size: 13px;
+      list-style-type: none;
+    }
+    
+    .passive-examples-list li {
+      margin-bottom: 10px;
+      line-height: 1.4;
+      padding: 8px;
+      background-color: white;
+      border-radius: 4px;
+      border-left: 2px solid #ff6b6b;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      font-style: italic;
+      color: #555;
+    }
+    
+    .passive-voice-explanation {
+      font-size: 12px;
+      margin-top: 10px;
+      padding: 8px;
+      background-color: rgba(255,255,255,0.7);
+      border-radius: 4px;
+    }
+    
     /* Google logo container styles */
     .google-container {
       display: flex;
@@ -375,6 +475,27 @@
       <div class="result-details">
         <div id="hashtag-pattern-value">Analyzing...</div>
         <div id="hashtag-points"></div>
+      </div>
+    </div>
+    
+    <!-- Language Patterns Container -->
+    <div id="language-patterns">
+      <h4><span class="icon">🚩</span> Suspicious Language Patterns</h4>
+      <ul class="language-patterns-list" id="language-patterns-list">
+        <!-- Language patterns will be added here -->
+      </ul>
+      <div class="pattern-tip">These patterns are commonly used in misinformation campaigns.</div>
+    </div>
+    
+    <!-- Passive Voice Examples Container -->
+    <div id="passive-voice-container">
+      <h4><span class="icon">🔍</span> Passive Voice Detected</h4>
+      <ul class="passive-examples-list" id="passive-examples-list">
+        <!-- Passive voice examples will be added here -->
+      </ul>
+      <div class="passive-voice-explanation">
+        <strong>Why this matters:</strong> Passive voice can be used to obscure who is responsible for actions. 
+        When overused, it may indicate an attempt to hide accountability or agency.
       </div>
     </div>
     

@@ -11,33 +11,55 @@ const rewardsBox = document.getElementById('rewards-box');
 const tabs = document.querySelectorAll('.tab');
 const contentSections = document.querySelectorAll('#leaderboard, #badges, #challenges');
 const googleFactCheck = document.getElementById('google_factcheck');
+const loadingIndicator = document.getElementById('loading-indicator');
+const analysisContainer = document.getElementById('analysis-container');
 
 
 // When popup opens, get current tab and analyze
-document.addEventListener('DOMContentLoaded', refreshUI);
+document.addEventListener('DOMContentLoaded', function() {
+  refreshUI();
+});
 
 function refreshUI() {
   // Get current tab info
   chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
     // If we have a tab and it's Twitter/X
     if (tabs[0] && (tabs[0].url.includes('twitter.com') || tabs[0].url.includes('x.com'))) {
-      // Send message to content script to analyze current page
-      chrome.tabs.sendMessage(tabs[0].id, {action: "analyze"}, function(response) {
-        if (response && response.success) {
-          updateUI(
-            response.botScore, 
-            response.misinfoScore, 
-            response.postingFrequencyScore,
-            response.hashtagPatternScore,
-            response.detectedPatterns,
-            response.accountAgeData,
-            response.hashtagInsights,
-            response.googleFactResponse
-          );
-        } else {
-          showError();
-        }
-      });
+      try {
+        // Send message to content script to analyze current page
+        chrome.tabs.sendMessage(tabs[0].id, {action: "analyze"}, function(response) {
+          if (chrome.runtime.lastError) {
+            console.error("OctoPal: Runtime error:", chrome.runtime.lastError);
+            showError("Connection error: " + chrome.runtime.lastError.message);
+            return;
+          }
+          
+          if (response && response.success) {
+            updateUI(
+              response.botScore,
+              response.misinfoScore,
+              response.postingFrequencyScore,
+              response.hashtagPatternScore,
+              response.detectedPatterns,
+              response.accountAgeData,
+              response.hashtagInsights,
+              response.languagePatterns,
+              response.passiveVoiceExamples,
+              response.googleFactResponse
+            );
+          } else {
+            let errorMsg = "Unknown error";
+            if (response && response.error) {
+              console.error("OctoPal: Analysis error:", response.error);
+              errorMsg = response.error;
+            }
+            showError(errorMsg);
+          }
+        });
+      } catch (err) {
+        console.error("OctoPal: Exception in popup:", err);
+        showError("Exception: " + err.message);
+      }
     } else {
       showNotSupported();
     }
@@ -85,12 +107,15 @@ function setupTabs() {
 }
 
 // Update UI with scores
-function updateUI(botScore, misinfoScore, postingFrequencyScore, hashtagPatternScore, detectedPatterns, accountAgeData, hashtagInsights, googleFactResponse) {
+function updateUI(botScore, misinfoScore, postingFrequencyScore, hashtagPatternScore, detectedPatterns, accountAgeData, hashtagInsights, languagePatterns, passiveVoiceExamples, googleFactResponse) {
   // Update bot likelihood
   botLikelihoodBar.style.width = botScore + '%';
   botLikelihoodValue.textContent = botScore + '% likelihood of bot activity';
-
-  googleFactCheck.textContent = googleFactResponse;
+  
+  // Update Google fact-check text if provided
+  if (googleFactCheck && googleFactResponse) {
+    googleFactCheck.textContent = googleFactResponse;
+  }
   
   // Set color based on risk level
   if (botScore < 30) {
@@ -148,6 +173,48 @@ function updateUI(botScore, misinfoScore, postingFrequencyScore, hashtagPatternS
     } else {
       hashtagPatternBar.className = 'progress bot-high';
     }
+  }
+  
+  // Display passive voice examples if available
+  const passiveVoiceContainer = document.getElementById('passive-voice-container');
+  const passiveExamplesList = document.getElementById('passive-examples-list');
+  
+  if (passiveVoiceContainer && passiveExamplesList && passiveVoiceExamples && passiveVoiceExamples.length > 0) {
+    // Clear existing examples
+    passiveExamplesList.innerHTML = '';
+    
+    // Show the container
+    passiveVoiceContainer.style.display = 'block';
+    
+    // Add each passive voice example
+    passiveVoiceExamples.forEach(example => {
+      const exampleItem = document.createElement('li');
+      exampleItem.textContent = `"${example}"`;
+      passiveExamplesList.appendChild(exampleItem);
+    });
+  } else if (passiveVoiceContainer) {
+    passiveVoiceContainer.style.display = 'none';
+  }
+  
+  // Display detected language patterns if available
+  const languagePatternsContainer = document.getElementById('language-patterns');
+  const languagePatternsList = document.getElementById('language-patterns-list');
+  
+  if (languagePatternsContainer && languagePatternsList && languagePatterns && languagePatterns.length > 0) {
+    // Clear existing patterns
+    languagePatternsList.innerHTML = '';
+    
+    // Show the container
+    languagePatternsContainer.style.display = 'block';
+    
+    // Add each language pattern
+    languagePatterns.forEach(pattern => {
+      const patternItem = document.createElement('li');
+      patternItem.textContent = pattern;
+      languagePatternsList.appendChild(patternItem);
+    });
+  } else if (languagePatternsContainer) {
+    languagePatternsContainer.style.display = 'none';
   }
   
   // Display detected patterns if element exists
@@ -251,9 +318,9 @@ function updateUI(botScore, misinfoScore, postingFrequencyScore, hashtagPatternS
 }
 
 // Show error message
-function showError() {
-  botLikelihoodValue.textContent = 'Error analyzing content';
-  misinfoLikelihoodValue.textContent = 'Error analyzing content';
+function showError(errorMsg = "Error analyzing content") {
+  botLikelihoodValue.textContent = errorMsg;
+  misinfoLikelihoodValue.textContent = 'Try refreshing the page';
   
   const postingFrequencyValue = document.getElementById('posting-frequency-value');
   if (postingFrequencyValue) {
@@ -278,6 +345,16 @@ function showError() {
   const hashtagInsightsContainer = document.getElementById('hashtag-insights');
   if (hashtagInsightsContainer) {
     hashtagInsightsContainer.style.display = 'none';
+  }
+  
+  const languagePatternsContainer = document.getElementById('language-patterns');
+  if (languagePatternsContainer) {
+    languagePatternsContainer.style.display = 'none';
+  }
+  
+  const passiveVoiceContainer = document.getElementById('passive-voice-container');
+  if (passiveVoiceContainer) {
+    passiveVoiceContainer.style.display = 'none';
   }
   
   reportButton.disabled = true;
@@ -312,6 +389,16 @@ function showNotSupported() {
   const hashtagInsightsContainer = document.getElementById('hashtag-insights');
   if (hashtagInsightsContainer) {
     hashtagInsightsContainer.style.display = 'none';
+  }
+  
+  const languagePatternsContainer = document.getElementById('language-patterns');
+  if (languagePatternsContainer) {
+    languagePatternsContainer.style.display = 'none';
+  }
+  
+  const passiveVoiceContainer = document.getElementById('passive-voice-container');
+  if (passiveVoiceContainer) {
+    passiveVoiceContainer.style.display = 'none';
   }
   
   reportButton.disabled = true;
