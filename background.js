@@ -260,6 +260,12 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     return true; // Will respond asynchronously
   }
   
+  // Handle getting badge progress
+  if (request.action === "getBadgeProgress") {
+    getBadgeProgress(sendResponse);
+    return true; // Will respond asynchronously
+  }
+  
   // Handle getting challenges
   if (request.action === "getChallenges") {
     getChallenges(sendResponse);
@@ -569,6 +575,12 @@ function checkBadgeProgress(badgeType, amount, sendResponse) {
         };
         badges.earned.push(earnedBadge);
         newBadges.push(earnedBadge);
+        
+        // Send badge earned notification
+        chrome.runtime.sendMessage({
+          action: "badgeEarned",
+          badge: earnedBadge
+        });
       }
     });
     
@@ -582,7 +594,9 @@ function checkBadgeProgress(badgeType, amount, sendResponse) {
             sendResponse({
               success: true,
               newBadges: newBadges,
-              allBadges: badges
+              allBadges: badges,
+              progress: badges.progress[badgeType],
+              requirement: getBadgeRequirement(badgeType)
             });
           }
         });
@@ -590,11 +604,24 @@ function checkBadgeProgress(badgeType, amount, sendResponse) {
         sendResponse({
           success: true,
           newBadges: [],
-          allBadges: badges
+          allBadges: badges,
+          progress: badges.progress[badgeType],
+          requirement: getBadgeRequirement(badgeType)
         });
       }
     });
   });
+}
+
+// Get badge requirement for a specific badge type
+function getBadgeRequirement(badgeType) {
+  // Find the lowest requirement badge for this type
+  const badgesForType = Object.values(BADGES).filter(badge => badge.type === badgeType);
+  if (badgesForType.length === 0) return 0;
+  
+  // Return the requirement of the badge with the lowest requirement
+  const requirements = badgesForType.map(badge => badge.requirement);
+  return Math.min(...requirements);
 }
 
 // Check report badge progress specifically
@@ -852,4 +879,40 @@ function getWeekStartDate(date) {
   const diff = d.getDate() - day;
   const weekStart = new Date(d.setDate(diff));
   return weekStart.toISOString().split('T')[0];
+}
+
+// Get badge progress data
+function getBadgeProgress(sendResponse) {
+  chrome.storage.local.get(['badges', 'userStats'], function(data) {
+    const badges = data.badges || { earned: [], progress: {} };
+    const userStats = data.userStats || {};
+    
+    // Compile all progress data from different sources
+    let badgeProgress = {
+      ...badges.progress
+    };
+    
+    // Add progress data from userStats
+    if (userStats.botsDetected) badgeProgress.bot_detection = userStats.botsDetected;
+    if (userStats.misinfoFlagged) badgeProgress.misinfo_flagged = userStats.misinfoFlagged;
+    if (userStats.sourcesValidated) badgeProgress.source_validation = userStats.sourcesValidated;
+    if (userStats.passiveDetected) badgeProgress.passive_detected = userStats.passiveDetected;
+    if (userStats.lowCredibilitySources) badgeProgress.low_credibility_sources = userStats.lowCredibilitySources;
+    if (userStats.reportsSubmitted) badgeProgress.report_submitted = userStats.reportsSubmitted;
+    if (userStats.consecutiveDays) badgeProgress.daily_usage = userStats.consecutiveDays;
+    
+    // Get earned badge dates
+    const earnedDates = {};
+    badges.earned.forEach(badge => {
+      if (badge.id && badge.earnedDate) {
+        earnedDates[badge.id] = badge.earnedDate;
+      }
+    });
+    
+    sendResponse({
+      success: true,
+      badgeProgress: badgeProgress,
+      earnedDates: earnedDates
+    });
+  });
 } 

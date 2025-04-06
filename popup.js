@@ -503,39 +503,83 @@ function loadBadges() {
 function displayBadges(allBadges, earnedBadges) {
   const earnedBadgesContainer = document.getElementById('earned-badges');
   const badgesToEarnContainer = document.getElementById('badges-to-earn');
+  const recentBadgesContainer = document.getElementById('recent-badges');
   const noEarnedBadgesMsg = document.getElementById('no-earned-badges');
+  const noRecentBadgesMsg = document.getElementById('no-recent-badges');
   
   // Clear existing content
   earnedBadgesContainer.innerHTML = '';
   badgesToEarnContainer.innerHTML = '';
+  recentBadgesContainer.innerHTML = '';
   
-  if (!earnedBadges || earnedBadges.length === 0) {
-    noEarnedBadgesMsg.style.display = 'block';
-  } else {
-    noEarnedBadgesMsg.style.display = 'none';
-    
-    // Add each earned badge
-    earnedBadges.forEach(badgeId => {
-      // Find the badge details from allBadges
-      const badge = Object.values(allBadges).find(b => b.id === badgeId);
-      if (badge) {
-        const badgeElement = createBadgeElement(badge, true);
-        earnedBadgesContainer.appendChild(badgeElement);
+  // Get badge progress data
+  chrome.runtime.sendMessage({ action: "getBadgeProgress" }, function(response) {
+    if (response && response.success) {
+      const badgeProgress = response.badgeProgress || {};
+      const earnedDates = response.earnedDates || {};
+      
+      // Keep track of recent badges
+      const recentBadges = [];
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      if (!earnedBadges || earnedBadges.length === 0) {
+        noEarnedBadgesMsg.style.display = 'block';
+        noRecentBadgesMsg.style.display = 'block';
+      } else {
+        noEarnedBadgesMsg.style.display = 'none';
+        
+        // Add each earned badge
+        earnedBadges.forEach(badgeId => {
+          // Find the badge details from allBadges
+          const badge = Object.values(allBadges).find(b => b.id === badgeId);
+          if (badge) {
+            const earnedDate = earnedDates[badgeId] ? new Date(earnedDates[badgeId]) : null;
+            const badgeElement = createBadgeElement(badge, true, 100, earnedDates[badgeId]);
+            earnedBadgesContainer.appendChild(badgeElement);
+            
+            // Check if this is a recent badge (earned in the last 7 days)
+            if (earnedDate && earnedDate > sevenDaysAgo) {
+              recentBadges.push({badge, earnedDate});
+            }
+          }
+        });
+        
+        // Display recent badges
+        if (recentBadges.length > 0) {
+          noRecentBadgesMsg.style.display = 'none';
+          
+          // Sort recent badges by date (newest first)
+          recentBadges.sort((a, b) => b.earnedDate - a.earnedDate);
+          
+          // Display up to 3 recent badges
+          recentBadges.slice(0, 3).forEach(({badge, earnedDate}) => {
+            const badgeElement = createBadgeElement(badge, true, 100, earnedDate.toISOString());
+            badgeElement.classList.add('recent-badge');
+            recentBadgesContainer.appendChild(badgeElement);
+          });
+        } else {
+          noRecentBadgesMsg.style.display = 'block';
+        }
       }
-    });
-  }
-  
-  // Add badges that can be earned
-  Object.values(allBadges).forEach(badge => {
-    if (!earnedBadges || !earnedBadges.includes(badge.id)) {
-      const badgeElement = createBadgeElement(badge, false);
-      badgesToEarnContainer.appendChild(badgeElement);
+      
+      // Add badges that can be earned
+      Object.values(allBadges).forEach(badge => {
+        if (!earnedBadges || !earnedBadges.includes(badge.id)) {
+          // Calculate progress percentage
+          const progress = badgeProgress[badge.type] || 0;
+          const progressPercent = Math.min(100, Math.round((progress / badge.requirement) * 100));
+          
+          const badgeElement = createBadgeElement(badge, false, progressPercent, null, progress);
+          badgesToEarnContainer.appendChild(badgeElement);
+        }
+      });
     }
   });
 }
 
 // Create a badge element for display
-function createBadgeElement(badge, earned) {
+function createBadgeElement(badge, earned, progressPercent, earnedDate, currentProgress) {
   const badgeElement = document.createElement('div');
   badgeElement.className = earned ? 'badge-item earned' : 'badge-item';
   
@@ -554,6 +598,36 @@ function createBadgeElement(badge, earned) {
   badgeElement.appendChild(iconElement);
   badgeElement.appendChild(nameElement);
   badgeElement.appendChild(descElement);
+  
+  // Add progress bar for unearned badges
+  if (!earned) {
+    const progressText = document.createElement('div');
+    progressText.className = 'badge-progress-text';
+    progressText.textContent = `Progress: ${currentProgress || 0}/${badge.requirement} (${progressPercent}%)`;
+    
+    const progressContainer = document.createElement('div');
+    progressContainer.className = 'badge-progress';
+    
+    const progressBar = document.createElement('div');
+    progressBar.className = 'badge-progress-bar';
+    progressBar.style.width = `${progressPercent}%`;
+    
+    progressContainer.appendChild(progressBar);
+    
+    badgeElement.appendChild(progressText);
+    badgeElement.appendChild(progressContainer);
+  } else if (earnedDate) {
+    // Add earned date for earned badges
+    const earnedDateElement = document.createElement('div');
+    earnedDateElement.className = 'badge-earned-date';
+    
+    // Format the date nicely
+    const dateObj = new Date(earnedDate);
+    const formattedDate = dateObj.toLocaleDateString();
+    
+    earnedDateElement.textContent = `Earned on: ${formattedDate}`;
+    badgeElement.appendChild(earnedDateElement);
+  }
   
   return badgeElement;
 }
@@ -907,7 +981,7 @@ function initializeTabs() {
   leaderboardTab.addEventListener('click', () => switchTab(leaderboardTab));
 }
 
-// Listen for points updates from background
+// Listen for messages from background
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   if (message.action === "pointsUpdated") {
     // Update the points display
@@ -970,6 +1044,35 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
     document.getElementById('reward-details').textContent = `Level Up! You're now a ${message.title}!`;
     
     // Hide after 5 seconds (longer for level up)
+    setTimeout(() => {
+      rewardsBox.style.display = 'none';
+    }, 5000);
+  } else if (message.action === "badgeEarned") {
+    // Handle badge earned notification
+    const badge = message.badge;
+    
+    // If we're on the badges tab, refresh the badge display
+    if (badgesContent.classList.contains('active')) {
+      loadBadges();
+    }
+    
+    // Show badge earned notification
+    rewardsBox.style.display = 'block';
+    
+    // Create a more elaborate rewards notification
+    const rewardDetails = document.getElementById('reward-details');
+    rewardDetails.innerHTML = `
+      <div class="badge-earned-notification">
+        <div class="badge-icon-large">${badge.icon}</div>
+        <div class="badge-earned-text">
+          <div class="badge-title">New Badge Earned!</div>
+          <div class="badge-name">${badge.name}</div>
+          <div class="badge-desc">${badge.description}</div>
+        </div>
+      </div>
+    `;
+    
+    // Hide after 5 seconds
     setTimeout(() => {
       rewardsBox.style.display = 'none';
     }, 5000);
