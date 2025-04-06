@@ -83,5 +83,30 @@ def call_python():
     misinfo_score = predict_misinformation_score(input_string)
     return jsonify({"result": result})
 
+@app.route('/predict', methods=['POST'])
+def predict():
+    try:
+        data = request.get_json()
+        text = data.get('text', '')
+        
+        if not text:
+            return jsonify({'error': 'No text provided'}), 400
+            
+        # Clean and transform the text
+        cleaned_text = clean_text(text)
+        text_tfidf = tfidf.transform([cleaned_text])
+        
+        # Get prediction probabilities
+        probabilities = model.predict_proba(text_tfidf)[0]
+        
+        return jsonify({
+            'real_probability': float(probabilities[0]),
+            'fake_probability': float(probabilities[1]),
+            'prediction': 'REAL' if probabilities[0] > 0.5 else 'FAKE'
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == "__main__":
     app.run(port=5000)

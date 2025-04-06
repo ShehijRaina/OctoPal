@@ -92,7 +92,7 @@ function handleScroll() {
       
       // If new tweets have been loaded
       if (currentTweetCount > tweetCountBeforeScroll) {
-        console.log(`OctoPal: New tweets detected (${currentTweetCount - tweetCountBeforeScroll} new tweets)`);
+        console.log(⁠ OctoPal: New tweets detected (${currentTweetCount - tweetCountBeforeScroll} new tweets) ⁠);
         
         // Throttle analysis to prevent too frequent updates
         const now = Date.now();
@@ -199,7 +199,7 @@ async function analyzeCurrentPage() {
   for (const selector of possibleSelectors) {
     const tweets = document.querySelectorAll(selector);
     if (tweets && tweets.length > 0) {
-      console.log(`OctoPal: Found ${tweets.length} tweets using selector: ${selector}`);
+      console.log(⁠ OctoPal: Found ${tweets.length} tweets using selector: ${selector} ⁠);
       allTweets = tweets;
       break;
     }
@@ -217,7 +217,7 @@ async function analyzeCurrentPage() {
   });
 
   // Log for debugging
-  console.log(`OctoPal: Found ${tweetElements.length} visible tweets on the page`);
+  console.log(⁠ OctoPal: Found ${tweetElements.length} visible tweets on the page ⁠);
 
   let botScoreTotal = 0;
   let misinfoScoreTotal = 0;
@@ -355,7 +355,7 @@ async function analyzeCurrentPage() {
     try {
       // Safely check for fact-checking data with a timeout
       const factCheckData = await Promise.race([
-        fetch(`http://127.0.0.1:5000/call-python?input=${encodeURIComponent(tweetText)}`)
+        fetch(⁠ http://127.0.0.1:5000/call-python?input=${encodeURIComponent(tweetText)} ⁠)
           .then(response => {
             if (!response.ok) {
               throw new Error('Network response was not ok');
@@ -627,14 +627,14 @@ function getTweetId(tweetElement) {
   // Method 3: Try to find time element's datetime
   const timeElement = tweetElement.querySelector('time');
   if (timeElement && timeElement.getAttribute('datetime')) {
-    return `time-${timeElement.getAttribute('datetime')}`;
+    return ⁠ time-${timeElement.getAttribute('datetime')} ⁠;
   }
   
   // Fallback: use a combination of username and text content to create a unique identifier
   const username = getUsernameFromTweet(tweetElement);
   const textContent = getTweetText(tweetElement).slice(0, 50);
   const timestamp = new Date().getTime();
-  return `${username}-${textContent}-${timestamp}`;
+  return ⁠ ${username}-${textContent}-${timestamp} ⁠;
 }
 
 // Extract username from tweet
@@ -802,7 +802,7 @@ function checkAccountAge(tweetElement) {
   }
   
   // For this version, we'll use a fallback method that extracts age from the UI if possible
-  const joinDateElement = document.querySelector(`a[href="/${userId}"] + div span`);
+  const joinDateElement = document.querySelector(⁠ a[href="/${userId}"] + div span ⁠);
   
   if (joinDateElement) {
     const joinDateText = joinDateElement.textContent || '';
@@ -1001,7 +1001,7 @@ function analyzeTweetForMisinformation(tweetElement) {
   });
   
   if (keywordFound) {
-    detectedPatterns.push(`Misinformation keyword: "${keywordDetected}"`);
+    detectedPatterns.push(⁠ Misinformation keyword: "${keywordDetected}" ⁠);
   }
   
   // 4. Check for many hashtags (sometimes indicates spam/misinfo campaigns)
@@ -1041,7 +1041,7 @@ function analyzeTweetForMisinformation(tweetElement) {
   });
   
   if (suspiciousLinkFound) {
-    detectedPatterns.push(`Suspicious link: ${suspiciousDomain}`);
+    detectedPatterns.push(⁠ Suspicious link: ${suspiciousDomain} ⁠);
   }
   
   // 6. Check for sensationalist phrases
@@ -1063,7 +1063,7 @@ function analyzeTweetForMisinformation(tweetElement) {
   });
   
   if (sensationalistPhraseFound) {
-    detectedPatterns.push(`Sensationalist language: "${sensationalistPhraseDetected}"`);
+    detectedPatterns.push(⁠ Sensationalist language: "${sensationalistPhraseDetected}" ⁠);
   }
   
   // 7. Check for overgeneralizations
@@ -1084,7 +1084,7 @@ function analyzeTweetForMisinformation(tweetElement) {
   });
   
   if (overgeneralizationFound) {
-    detectedPatterns.push(`Overgeneralization: "${overgeneralizationDetected}"`);
+    detectedPatterns.push(⁠ Overgeneralization: "${overgeneralizationDetected}" ⁠);
   }
   
   // 8. NEW: Check for sentence structures common in misinformation
@@ -1149,10 +1149,10 @@ function analyzeTweetForMisinformation(tweetElement) {
   
   // 8.4 Check for false dichotomy structures
   const falseDichotomyStructures = [
-    /(either|it's either) (.*?) or (.*?)/i,
+    /(either|it's either) (.?) or (.?)/i,
     /there (are|is) only two (choices|options|possibilities)/i,
     /you('re| are) either with (us|me) or against (us|me)/i,
-    /if you('re| are) not (.*?), then you('re| are) (.*?)/i
+    /if you('re| are) not (.?), then you('re| are) (.?)/i
   ];
   
   for (const sentence of sentences) {
@@ -1238,10 +1238,10 @@ function analyzeTweetForMisinformation(tweetElement) {
   // Add scores based on both absolute count and percentage
   if (passiveCount >= 3 || passivePercentage >= 50) {
     score += 25;
-    detectedPatterns.push(`Excessive passive voice (${passiveCount} instances, ${Math.round(passivePercentage)}% of text)`);
+    detectedPatterns.push(⁠ Excessive passive voice (${passiveCount} instances, ${Math.round(passivePercentage)}% of text) ⁠);
   } else if (passiveCount >= 2 || passivePercentage >= 30) {
     score += 15;
-    detectedPatterns.push(`Significant passive voice use (${passiveCount} instances)`);
+    detectedPatterns.push(⁠ Significant passive voice use (${passiveCount} instances) ⁠);
   } else if (passiveCount === 1 && sentences.length <= 3) {
     // Only flag as suspicious if it's a short text with passive voice
     score += 10;
@@ -1344,7 +1344,7 @@ function analyzeHashtagPatterns(tweetElement) {
     for (const [tag, count] of Object.entries(userData.hashtagCounts)) {
       if (count >= 3) {
         score += 15;
-        insight = `Excessive use of ${tag}`;
+        insight = ⁠ Excessive use of ${tag} ⁠;
         break;
       }
     }
@@ -1367,7 +1367,7 @@ function analyzeHashtagPatterns(tweetElement) {
   // 4. Check hashtag count threshold in current tweet
   if (hashtagCount > 6) {
     score += 25;
-    insight = insight || `Excessive hashtags in tweet (${hashtagCount})`;
+    insight = insight || ⁠ Excessive hashtags in tweet (${hashtagCount}) ⁠;
   } else if (hashtagCount > 4) {
     score += 15;
     insight = insight || "Multiple hashtags in tweet";
@@ -1593,4 +1593,30 @@ function analyzeSourcesInTweet(tweetElement) {
 window.addEventListener('load', () => {
   // Give the page a moment to fully render
   setTimeout(setupScrollDetection, 1000);
-}); 
+});
+
+async function checkFakeNews(text) {
+    try {
+        const response = await fetch('http://localhost:5000/predict', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ text })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        
+        const data = await response.json();
+        return {
+            isFake: data.prediction === 'FAKE',
+            realProbability: data.real_probability,
+            fakeProbability: data.fake_probability
+        };
+    } catch (error) {
+        console.error('Error checking fake news:', error);
+        return null;
+    }
+}
