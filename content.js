@@ -12,6 +12,12 @@ const userHashtagPatterns = new Map();
 
 // Listen for messages from the popup
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+  // Add a ping handler to check if content script is loaded
+  if (request.action === "ping") {
+    sendResponse({ success: true });
+    return true;
+  }
+  
   if (request.action === "analyze") {
     // Perform analysis of the current page
     analyzeCurrentPage().then(results => {
@@ -51,13 +57,38 @@ async function analyzeCurrentPage() {
   // This is a very simplified implementation
   // In a real extension, you would use more sophisticated analysis
   
-  const allTweets = document.querySelectorAll('[data-testid="tweet"]');
+  // Try multiple possible selectors for tweets
+  let allTweets = [];
+  const possibleSelectors = [
+    '[data-testid="tweet"]',
+    '[data-testid="tweetText"]',
+    'article[role="article"]',
+    'div[data-testid="cellInnerDiv"]'
+  ];
+  
+  // Try each selector
+  for (const selector of possibleSelectors) {
+    const tweets = document.querySelectorAll(selector);
+    if (tweets && tweets.length > 0) {
+      console.log(`OctoPal: Found ${tweets.length} tweets using selector: ${selector}`);
+      allTweets = tweets;
+      break;
+    }
+  }
+  
+  // If no tweets found with any selector
+  if (allTweets.length === 0) {
+    console.warn('OctoPal: No tweets found with any selector. Twitter DOM may have changed.');
+  }
 
   // Filter tweets that are visible in the viewport
   const tweetElements = Array.from(allTweets).filter(tweet => {
     const rect = tweet.getBoundingClientRect();
     return rect.top >= 0 && rect.bottom <= window.innerHeight && rect.left >= 0 && rect.right <= window.innerWidth;
   });
+
+  // Log for debugging
+  console.log(`OctoPal: Found ${tweetElements.length} visible tweets on the page`);
 
   let botScoreTotal = 0;
   let misinfoScoreTotal = 0;
@@ -400,13 +431,39 @@ function extractHashtags(text) {
 
 // Get tweet text
 function getTweetText(tweetElement) {
-  // Try multiple possible selectors for tweet text
-  const tweetTextElement = 
-    tweetElement.querySelector('[data-testid="tweetText"]') || 
-    tweetElement.querySelector('.css-901oao') || // Common Twitter text class
-    tweetElement.querySelector('[lang]'); // Text elements often have lang attribute
+  // Try multiple possible selectors for tweet text (updated for current Twitter DOM)
+  const selectors = [
+    '[data-testid="tweetText"]',
+    '.css-901oao',  // Common Twitter text class
+    'div[lang]',    // Text elements often have lang attribute
+    'div[dir="auto"]', // Text often has dir=auto
+    'article[role="article"] div[lang]',
+    'div[data-testid="cellInnerDiv"] div[lang]'
+  ];
   
-  return tweetTextElement ? tweetTextElement.textContent.trim() : '';
+  // Try each selector
+  for (const selector of selectors) {
+    const element = tweetElement.querySelector(selector);
+    if (element && element.textContent) {
+      return element.textContent.trim();
+    }
+  }
+  
+  // Fallback: try to find any text node with substantial content
+  const textNodes = Array.from(tweetElement.querySelectorAll('div'))
+    .filter(div => {
+      const text = div.textContent?.trim() || '';
+      return text.length > 20 && !text.includes('Retweeted') && !text.includes('Liked'); 
+    });
+  
+  if (textNodes.length > 0) {
+    // Sort by content length (longest first) as it's likely the tweet content
+    textNodes.sort((a, b) => b.textContent.length - a.textContent.length);
+    return textNodes[0].textContent.trim();
+  }
+  
+  // Last resort: just return all text content
+  return tweetElement.textContent.trim();
 }
 
 // Get a unique identifier for a tweet
@@ -414,50 +471,106 @@ function getTweetId(tweetElement) {
   // Try multiple methods to get a tweet ID
   
   // Method 1: Try to find a data attribute with the tweet ID
-  const tweetLink = tweetElement.querySelector('a[href*="/status/"]');
-  if (tweetLink) {
-    const href = tweetLink.getAttribute('href');
-    const match = href.match(/\/status\/(\d+)/);
-    if (match && match[1]) return match[1];
+  const tweetLinkSelectors = [
+    'a[href*="/status/"]',
+    'a[role="link"][href*="/status/"]',
+    'div[role="link"][tabindex="0"]'
+  ];
+  
+  for (const selector of tweetLinkSelectors) {
+    const tweetLink = tweetElement.querySelector(selector);
+    if (tweetLink) {
+      const href = tweetLink.getAttribute('href');
+      if (href) {
+        const match = href.match(/\/status\/(\d+)/);
+        if (match && match[1]) return match[1];
+      }
+    }
   }
   
   // Method 2: Try to find data-tweet-id attribute
-  const tweetId = tweetElement.getAttribute('data-tweet-id');
-  if (tweetId) return tweetId;
+  const idAttributes = ['data-tweet-id', 'data-testid', 'id'];
+  for (const attr of idAttributes) {
+    const id = tweetElement.getAttribute(attr);
+    if (id) return id;
+  }
   
-  // Method 3: Fallback to using time element's datetime
+  // Method 3: Try to find time element's datetime
   const timeElement = tweetElement.querySelector('time');
   if (timeElement && timeElement.getAttribute('datetime')) {
     return `time-${timeElement.getAttribute('datetime')}`;
   }
   
-  // Fallback: use a combination of username and text content
+  // Fallback: use a combination of username and text content to create a unique identifier
   const username = getUsernameFromTweet(tweetElement);
-  const textContent = tweetElement.textContent?.slice(0, 50) || '';
-  return `${username}-${textContent}`;
+  const textContent = getTweetText(tweetElement).slice(0, 50);
+  const timestamp = new Date().getTime();
+  return `${username}-${textContent}-${timestamp}`;
 }
 
 // Extract username from tweet
 function getUsernameFromTweet(tweetElement) {
   // Try multiple selectors for username
-  const usernameElement = 
-    tweetElement.querySelector('[data-testid="User-Name"]') || 
-    tweetElement.querySelector('a[role="link"][href^="/"]');
+  const usernameSelectors = [
+    '[data-testid="User-Name"]', 
+    'a[role="link"][href^="/"]',
+    'div[dir="ltr"] span.css-901oao',  // Common Twitter username span
+    'a[tabindex="-1"][role="link"][href^="/"]',
+    'a[href^="/"][aria-label]'  // Profile links often have aria-label
+  ];
   
-  if (usernameElement) {
-    const usernameText = usernameElement.textContent || '';
-    // Usually usernames are in the format "Name @username"
-    const usernameMatch = usernameText.match(/@(\w+)/);
-    if (usernameMatch && usernameMatch[1]) return usernameMatch[1];
+  // Try each selector
+  for (const selector of usernameSelectors) {
+    const element = tweetElement.querySelector(selector);
+    if (!element) continue;
     
-    // If no @ format found, try to extract from href
-    if (usernameElement.getAttribute('href')) {
-      const hrefMatch = usernameElement.getAttribute('href').match(/^\/([^/]+)/);
-      if (hrefMatch && hrefMatch[1] && hrefMatch[1] !== 'search') return hrefMatch[1];
+    // Check if the element text contains @username
+    const text = element.textContent || '';
+    const usernameMatch = text.match(/@(\w+)/);
+    if (usernameMatch && usernameMatch[1]) {
+      return usernameMatch[1];
     }
     
-    return usernameText;
+    // Check if we can extract from href
+    const href = element.getAttribute('href');
+    if (href) {
+      const hrefMatch = href.match(/^\/([^/?]+)/);
+      if (hrefMatch && hrefMatch[1] && 
+          !['search', 'explore', 'home', 'notifications', 'messages'].includes(hrefMatch[1])) {
+        return hrefMatch[1];
+      }
+    }
   }
+  
+  // Try to look for a tweet author element pattern
+  const authorElements = Array.from(tweetElement.querySelectorAll('a[role="link"]'))
+    .filter(link => {
+      const href = link.getAttribute('href');
+      return href && href.startsWith('/') && !href.includes('/status/') && 
+             !href.includes('/search') && link.textContent && 
+             link.textContent.length > 0;
+    });
+  
+  if (authorElements.length > 0) {
+    // First or shortest is usually the username
+    authorElements.sort((a, b) => a.textContent.length - b.textContent.length);
+    const text = authorElements[0].textContent;
+    const usernameMatch = text.match(/@(\w+)/);
+    if (usernameMatch && usernameMatch[1]) {
+      return usernameMatch[1];
+    }
+    
+    const href = authorElements[0].getAttribute('href');
+    if (href) {
+      const hrefMatch = href.match(/^\/([^/?]+)/);
+      if (hrefMatch && hrefMatch[1]) {
+        return hrefMatch[1];
+      }
+    }
+    
+    return authorElements[0].textContent.trim();
+  }
+  
   return 'unknown';
 }
 

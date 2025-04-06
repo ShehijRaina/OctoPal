@@ -4,21 +4,23 @@
   "version": "0.1.0",
   "description": "Identify bots and misinformation on social media",
   "icons": {
-    "16": "images/octopal-logo.png",
-    "48": "images/octopal-logo.png",
-    "128": "images/octopal-logo.png"
+    "16": "images/icons/icon16.png",
+    "48": "images/icons/icon48.png",
+    "128": "images/icons/icon128.png"
   },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
-      "16": "images/octopal-logo.png",
-      "48": "images/octopal-logo.png",
-      "128": "images/octopal-logo.png"
+      "16": "images/icons/icon16.png",
+      "48": "images/icons/icon48.png",
+      "128": "images/icons/icon128.png"
     }
   },
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "scripting",
+    "tabs"
   ],
   "host_permissions": [
     "https://*.twitter.com/*",
@@ -33,7 +35,14 @@
         "https://*.twitter.com/*",
         "https://*.x.com/*"
       ],
-      "js": ["content.js"]
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["images/*"],
+      "matches": ["https://*.twitter.com/*", "https://*.x.com/*"]
     }
   ]
 } 

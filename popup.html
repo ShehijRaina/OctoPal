@@ -1,549 +1,177 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>OctoPal</title>
-  <meta charset="UTF-8">
-  <style>
-    body {
-      width: 350px;
-      padding: 15px;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: #f8f9fa;
-      color: #333;
-      margin: 0;
-    }
-    
-    .header {
-      display: flex;
-      align-items: center;
-      margin-bottom: 15px;
-      border-bottom: 2px solid #e6e6e6;
-      padding-bottom: 10px;
-    }
-    
-    .logo {
-      width: 40px;
-      height: 40px;
-      margin-right: 10px;
-    }
-    
-    h1 {
-      color: #0b55e8;
-      font-size: 22px;
-      margin: 0;
-    }
-    
-    .user-stats {
-      display: flex;
-      justify-content: space-between;
-      background: linear-gradient(135deg, #0b55e8, #4a7dec);
-      color: white;
-      padding: 10px;
-      border-radius: 10px;
-      margin-bottom: 15px;
-    }
-    
-    .stat-box {
-      text-align: center;
-    }
-    
-    .stat-value {
-      font-size: 18px;
-      font-weight: bold;
-    }
-    
-    .stat-label {
-      font-size: 12px;
-      opacity: 0.9;
-    }
-    
-    .content {
-      margin: 15px 0;
-    }
-    
-    .stats {
-      margin-bottom: 15px;
-      padding: 15px;
-      background: white;
-      border-radius: 10px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    }
-    
-    .stats h3 {
-      margin-top: 0;
-      display: flex;
-      align-items: center;
-      color: #0b55e8;
-    }
-    
-    .icon {
-      margin-right: 8px;
-    }
-    
-    .progress-bar {
-      height: 12px;
-      background-color: #e0e0e0;
-      border-radius: 6px;
-      margin: 10px 0;
-      overflow: hidden;
-    }
-    
-    .progress {
-      height: 100%;
-      background-color: #0b55e8;
-      border-radius: 6px;
-      transition: width 0.5s ease-out;
-    }
-    
-    .bot-high {
-      background: linear-gradient(90deg, #ff6b6b, #ff3838);
-    }
-    
-    .bot-medium {
-      background: linear-gradient(90deg, #ffd166, #ffb347);
-    }
-    
-    .bot-low {
-      background: linear-gradient(90deg, #5cdb95, #3bb878);
-    }
-    
-    .result-details {
-      display: flex;
-      justify-content: space-between;
-      font-size: 14px;
-    }
-    
-    .action-row {
-      display: flex;
-      gap: 10px;
-    }
-    
-    button {
-      background-color: #0b55e8;
-      color: white;
-      border: none;
-      padding: 10px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: bold;
-      flex: 1;
-    }
-    
-    button:hover {
-      background-color: #2e6ef0;
-      transform: translateY(-1px);
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      transition: all 0.2s;
-    }
-    
-    button:active {
-      transform: translateY(0);
-    }
-    
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: bold;
-      margin-left: 10px;
-    }
-    
-    .rewards {
-      position: relative;
-      margin-top: 15px;
-      padding: 10px;
-      background: #fffaf0;
-      border: 1px dashed #ffc107;
-      border-radius: 8px;
-      text-align: center;
-      display: none;
-    }
-    
-    .tab-container {
-      display: flex;
-      margin-top: 15px;
-      border-bottom: 1px solid #e6e6e6;
-    }
-    
-    .tab {
-      padding: 8px 15px;
-      cursor: pointer;
-      font-size: 14px;
-      border-bottom: 2px solid transparent;
-    }
-    
-    .tab.active {
-      border-bottom: 2px solid #0b55e8;
-      color: #0b55e8;
-      font-weight: bold;
-    }
-    
-    #leaderboard, #badges, #challenges {
-      display: none;
-      padding: 10px 0;
-    }
-    
-    .pattern-list {
-      margin: 0;
-      padding-left: 20px;
-      font-size: 13px;
-    }
-    
-    .pattern-list li {
-      margin-bottom: 4px;
-    }
-    
-    #detected-patterns {
-      margin-top: 15px;
-      padding: 10px;
-      background-color: #f8f8f8;
-      border-radius: 6px;
-      display: none;
-    }
-    
-    #detected-patterns h4 {
-      margin-top: 0;
-      margin-bottom: 8px;
-      color: #0b55e8;
-      font-size: 14px;
-    }
-    
-    #account-age-info {
-      margin-top: 15px;
-      padding: 10px;
-      background-color: #f8f8f8;
-      border-radius: 6px;
-      display: none;
-    }
-    
-    #account-age-info h4 {
-      margin-top: 0;
-      margin-bottom: 8px;
-      color: #0b55e8;
-      font-size: 14px;
-    }
-    
-    .account-age-list {
-      margin: 0;
-      padding-left: 20px;
-      font-size: 13px;
-    }
-    
-    .account-age-list li {
-      margin-bottom: 8px;
-      line-height: 1.4;
-    }
-    
-    .high-risk {
-      color: #ff3838;
-      font-weight: bold;
-    }
-    
-    .medium-risk {
-      color: #ffb347;
-      font-weight: bold;
-    }
-    
-    .low-risk {
-      color: #3bb878;
-      font-weight: bold;
-    }
-    
-    .no-risk {
-      color: #3bb878;
-    }
-    
-    #hashtag-insights {
-      margin-top: 15px;
-      padding: 10px;
-      background-color: #f8f8f8;
-      border-radius: 6px;
-      display: none;
-    }
-    
-    #hashtag-insights h4 {
-      margin-top: 0;
-      margin-bottom: 8px;
-      color: #0b55e8;
-      font-size: 14px;
-    }
-    
-    .hashtag-insights-list {
-      margin: 0;
-      padding-left: 20px;
-      font-size: 13px;
-    }
-    
-    .hashtag-insights-list li {
-      margin-bottom: 8px;
-      line-height: 1.4;
-    }
-    
-    .hashtag-insights-list li span.high-risk {
-      color: #ff3838;
-      margin-right: 5px;
-    }
-    
-    /* Language pattern analysis styles */
-    #language-patterns {
-      margin-top: 15px;
-      padding: 10px;
-      background-color: #f8f8f8;
-      border-radius: 6px;
-      display: none;
-      border-left: 3px solid #ff3838;
-    }
-    
-    #language-patterns h4 {
-      margin-top: 0;
-      margin-bottom: 8px;
-      color: #0b55e8;
-      font-size: 14px;
-      display: flex;
-      align-items: center;
-    }
-    
-    #language-patterns h4 .icon {
-      color: #ff3838;
-    }
-    
-    .language-patterns-list {
-      margin: 0;
-      padding-left: 20px;
-      font-size: 13px;
-    }
-    
-    .language-patterns-list li {
-      margin-bottom: 8px;
-      line-height: 1.4;
-      display: flex;
-      align-items: center;
-    }
-    
-    .language-patterns-list li:before {
-      content: "⚠️";
-      margin-right: 5px;
-      flex-shrink: 0;
-    }
-    
-    .pattern-tip {
-      font-size: 12px;
-      color: #555;
-      font-style: italic;
-      margin-top: 5px;
-      padding-left: 20px;
-    }
-    
-    /* Passive Voice Container */
-    #passive-voice-container {
-      margin-top: 15px;
-      padding: 12px;
-      background-color: #fff0f0;
-      border-radius: 6px;
-      display: none;
-      border-left: 3px solid #ff6b6b;
-    }
-    
-    #passive-voice-container h4 {
-      margin-top: 0;
-      margin-bottom: 8px;
-      color: #e83a3a;
-      font-size: 14px;
-      display: flex;
-      align-items: center;
-    }
-    
-    #passive-voice-container h4 .icon {
-      margin-right: 8px;
-    }
-    
-    .passive-examples-list {
-      margin: 0;
-      padding-left: 5px;
-      font-size: 13px;
-      list-style-type: none;
-    }
-    
-    .passive-examples-list li {
-      margin-bottom: 10px;
-      line-height: 1.4;
-      padding: 8px;
-      background-color: white;
-      border-radius: 4px;
-      border-left: 2px solid #ff6b6b;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      font-style: italic;
-      color: #555;
-    }
-    
-    .passive-voice-explanation {
-      font-size: 12px;
-      margin-top: 10px;
-      padding: 8px;
-      background-color: rgba(255,255,255,0.7);
-      border-radius: 4px;
-    }
-    
-    /* Google logo container styles */
-    .google-container {
-      display: flex;
-      align-items: center;
-      background-color: white;
-      padding: 15px;
-      border-radius: 10px;
-      margin: 15px 0;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-    }
-    
-    .google-logo {
-      width: 24px;
-      height: 24px;
-      margin-right: 12px;
-      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="%234285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="%2334A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="%23FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24c0 3.55.85 6.91 2.34 9.88l7.35-5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/><path fill="%23EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>');
-      background-repeat: no-repeat;
-      background-size: contain;
-    }
-    
-    .google-text {
-      flex: 1;
-      font-size: 14px;
-      color: #333;
-    }
-  </style>
+  <title>OctoPal - Twitter Analysis</title>
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="header">
-    <img src="images/octopal-logo.png" alt="OctoPal Logo" class="logo">
-    <h1>OctoPal</h1>
+  <div id="main-content">
+    <div class="header">
+      <h1><img src="images/icons/icon48.png" alt="OctoPal logo"> OctoPal</h1>
+      <div class="subtitle">Twitter/X Analysis Tool</div>
+    </div>
+    
+    <!-- User Stats Section -->
+    <div id="user-stats">
+      <div class="stats-row">
+        <div class="stat-box">
+          <div class="stat-label">Points</div>
+          <div id="user-points" class="stat-value">0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Level</div>
+          <div id="user-level" class="stat-value">Novice</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Reports</div>
+          <div id="user-reports" class="stat-value">0</div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Tabs Navigation -->
+    <div class="tabs-container">
+      <div class="tabs">
+        <button class="tab-btn active" id="analysis-tab">Analysis</button>
+        <button class="tab-btn" id="badges-tab">Badges</button>
+        <button class="tab-btn" id="challenges-tab">Challenges</button>
+        <button class="tab-btn" id="leaderboard-tab">Leaderboard</button>
+      </div>
+      
+      <!-- Tab Content -->
+      <div class="tab-content">
+        <!-- Analysis Tab (Default View) -->
+        <div id="analysis-content" class="content-section active">
+          <div class="spinner" id="loading-spinner">
+            <div class="bounce1"></div>
+            <div class="bounce2"></div>
+            <div class="bounce3"></div>
+          </div>
+          
+          <div id="error-container" style="display: none;">
+            <div class="error-icon">⚠️</div>
+            <div id="error-message">An error occurred.</div>
+          </div>
+          
+          <div id="analysis-results" style="display: none;">
+            <h3>Bot Activity Analysis</h3>
+            <div class="progress-container">
+              <div class="progress-bar">
+                <div class="progress" id="bot-likelihood"></div>
+              </div>
+              <div class="progress-value" id="bot-likelihood-value">0% likelihood of bot activity</div>
+            </div>
+            
+            <h3>Misinformation Analysis</h3>
+            <div class="progress-container">
+              <div class="progress-bar">
+                <div class="progress" id="misinfo-likelihood"></div>
+              </div>
+              <div class="progress-value" id="misinfo-likelihood-value">0% likelihood of misinformation</div>
+            </div>
+            
+            <h3>Posting Frequency</h3>
+            <div class="progress-container">
+              <div class="progress-bar">
+                <div class="progress" id="posting-frequency"></div>
+              </div>
+              <div class="progress-value" id="posting-frequency-value">0% suspicious posting patterns</div>
+            </div>
+            
+            <h3>Hashtag Patterns</h3>
+            <div class="progress-container">
+              <div class="progress-bar">
+                <div class="progress" id="hashtag-pattern"></div>
+              </div>
+              <div class="progress-value" id="hashtag-pattern-value">0% suspicious hashtag patterns</div>
+            </div>
+            
+            <div id="google-fact-check-container">
+              <h3>Google Fact Check</h3>
+              <div id="google-fact-check" class="fact-check-result">No fact check results found.</div>
+            </div>
+            
+            <div id="detected-patterns" style="display: none;"></div>
+            <div id="account-age-info" style="display: none;"></div>
+            <div id="hashtag-insights" style="display: none;"></div>
+            
+            <div id="language-patterns" style="display: none;">
+              <h4><span class="suspicious-icon">🔍</span> Suspicious Language Patterns:</h4>
+              <ul id="language-patterns-list"></ul>
+            </div>
+            
+            <div id="passive-voice-container" style="display: none;">
+              <h4><span class="passive-icon">✍️</span> Passive Voice Detected:</h4>
+              <ul id="passive-examples-list"></ul>
+              <p class="passive-explanation">Passive voice can be used to obscure responsibility or source of information.</p>
+            </div>
+            
+            <div class="action-buttons">
+              <button id="report-button" disabled>Report Account</button>
+              <button id="share-button" disabled>Share Results</button>
+            </div>
+          </div>
+          
+          <div id="not-twitter-message" style="display: none;">
+            <div class="info-icon">ℹ️</div>
+            <p>This extension only works on Twitter/X pages. Please navigate to Twitter/X to analyze content.</p>
+          </div>
+        </div>
+        
+        <!-- Badges Tab -->
+        <div id="badges-content" class="content-section">
+          <h3>Your Badges</h3>
+          <div id="earned-badges-container">
+            <h4>Earned Badges</h4>
+            <div id="earned-badges" class="badges-grid"></div>
+            <div id="no-earned-badges" class="empty-state">
+              No badges earned yet. Keep detecting bots and misinformation!
+            </div>
+          </div>
+          
+          <div id="badges-to-earn-container">
+            <h4>Badges to Earn</h4>
+            <div id="badges-to-earn" class="badges-grid"></div>
+          </div>
+        </div>
+        
+        <!-- Challenges Tab -->
+        <div id="challenges-content" class="content-section">
+          <h3>Current Challenges</h3>
+          <div id="daily-challenges-container">
+            <h4>Daily Challenges</h4>
+            <div id="daily-challenges" class="challenges-list"></div>
+          </div>
+          
+          <div id="weekly-challenges-container">
+            <h4>Weekly Challenges</h4>
+            <div id="weekly-challenges" class="challenges-list"></div>
+          </div>
+        </div>
+        
+        <!-- Leaderboard Tab -->
+        <div id="leaderboard-content" class="content-section">
+          <h3>Community Leaderboard</h3>
+          <div id="leaderboard-container">
+            <div id="leaderboard-loading" class="loading-indicator">
+              Loading leaderboard data...
+            </div>
+            <div id="leaderboard-list" class="leaderboard-list"></div>
+            <div id="leaderboard-error" class="error-state" style="display: none;">
+              Unable to load leaderboard data. Please try again later.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Rewards Notification Box -->
+    <div id="rewards-notification" style="display: none;">
+      <div class="reward-icon">🏆</div>
+      <div id="reward-details"></div>
+    </div>
+    
   </div>
-  
-  <div class="user-stats">
-    <div class="stat-box">
-      <div class="stat-value" id="user-points">0</div>
-      <div class="stat-label">POINTS</div>
-    </div>
-    <div class="stat-box">
-      <div class="stat-value" id="user-reports">0</div>
-      <div class="stat-label">REPORTS</div>
-    </div>
-    <div class="stat-box">
-      <div class="stat-value" id="user-level">1</div>
-      <div class="stat-label">LEVEL</div>
-    </div>
-  </div>
-  
-  <div class="content">
-    <div class="stats">
-      <h3><span class="icon">🤖</span> Bot Likelihood</h3>
-      <div class="progress-bar">
-        <div id="bot-likelihood" class="progress" style="width: 0%"></div>
-      </div>
-      <div class="result-details">
-        <div id="bot-value">Analyzing...</div>
-        <div id="bot-points"></div>
-      </div>
-    </div>
-
-    <div class="stats">
-      <h3><span class="icon">🔍</span> Misinformation Score</h3>
-      <div class="progress-bar">
-        <div id="misinfo-likelihood" class="progress" style="width: 0%"></div>
-      </div>
-      <div class="result-details">
-        <div id="misinfo-value">Analyzing...</div>
-        <div id="misinfo-points"></div>
-      </div>
-    </div>
-    
-    <div class="stats">
-      <h3><span class="icon">⏱️</span> Posting Frequency</h3>
-      <div class="progress-bar">
-        <div id="posting-frequency" class="progress" style="width: 0%"></div>
-      </div>
-      <div class="result-details">
-        <div id="posting-frequency-value">Analyzing...</div>
-        <div id="frequency-points"></div>
-      </div>
-    </div>
-    
-    <div class="stats">
-      <h3><span class="icon">#️⃣</span> Hashtag Patterns</h3>
-      <div class="progress-bar">
-        <div id="hashtag-pattern" class="progress" style="width: 0%"></div>
-      </div>
-      <div class="result-details">
-        <div id="hashtag-pattern-value">Analyzing...</div>
-        <div id="hashtag-points"></div>
-      </div>
-    </div>
-    
-    <!-- Language Patterns Container -->
-    <div id="language-patterns">
-      <h4><span class="icon">🚩</span> Suspicious Language Patterns</h4>
-      <ul class="language-patterns-list" id="language-patterns-list">
-        <!-- Language patterns will be added here -->
-      </ul>
-      <div class="pattern-tip">These patterns are commonly used in misinformation campaigns.</div>
-    </div>
-    
-    <!-- Passive Voice Examples Container -->
-    <div id="passive-voice-container">
-      <h4><span class="icon">🔍</span> Passive Voice Detected</h4>
-      <ul class="passive-examples-list" id="passive-examples-list">
-        <!-- Passive voice examples will be added here -->
-      </ul>
-      <div class="passive-voice-explanation">
-        <strong>Why this matters:</strong> Passive voice can be used to obscure who is responsible for actions. 
-        When overused, it may indicate an attempt to hide accountability or agency.
-      </div>
-    </div>
-    
-    <!-- Detected Patterns Container -->
-    <div id="detected-patterns"></div>
-    
-    <!-- Account Age Information -->
-    <div id="account-age-info"></div>
-    
-    <!-- Hashtag Insights -->
-    <div id="hashtag-insights"></div>
-    
-    <div class="rewards" id="rewards-box">
-      <h4>🎉 Great job spotting this content!</h4>
-      <div id="reward-details">+0 points</div>
-    </div>
-    
-    <!-- Google container -->
-    <div class="google-container">
-      <div class="google-logo"></div>
-      <div id="google_factcheck" class="google-text">Fact-checking powered by Google API</div>
-    </div>
-    
-    <div class="action-row">
-      <button id="report-button">Report Content</button>
-      <button id="share-button">Share Finding</button>
-    </div>
-  </div>
-  
-  <div class="tab-container">
-    <div class="tab active" data-tab="analysis">Analysis</div>
-    <div class="tab" data-tab="leaderboard">Leaderboard</div>
-    <div class="tab" data-tab="badges">Badges</div>
-    <div class="tab" data-tab="challenges">Challenges</div>
-  </div>
-  
-  <div id="leaderboard">
-    <p>Loading leaderboard data...</p>
-  </div>
-  
-  <div id="badges">
-    <p>Complete actions to earn badges!</p>
-  </div>
-  
-  <div id="challenges">
-    <p>Daily challenge: Report 3 suspicious posts</p>
-  </div>
-  
   <script src="popup.js"></script>
 </body>
 </html> 
