@@ -398,6 +398,16 @@ function getUserStats(sendResponse) {
   });
 }
 
+// Broadcast points update to all open popup windows
+function broadcastPointsUpdate(totalPoints, pointsAwarded, reason) {
+  chrome.runtime.sendMessage({
+    action: "pointsUpdated",
+    totalPoints: totalPoints,
+    pointsAwarded: pointsAwarded,
+    reason: reason
+  });
+}
+
 // Award points to the user
 function awardPoints(pointType, amount, details, sendResponse) {
   if (!POINT_VALUES[pointType]) {
@@ -460,6 +470,9 @@ function awardPoints(pointType, amount, details, sendResponse) {
     }, function() {
       // Check if level up occurred
       checkAndUpdateLevel(points.total);
+      
+      // Broadcast points update to all open popup windows
+      broadcastPointsUpdate(points.total, pointsAwarded, pointType);
       
       // Send response with updated points
       sendResponse({

@@ -85,7 +85,7 @@ function switchTab(activeTab) {
 }
 
 // Update UI with scores
-function updateUI(botScore, misinfoScore, postingFrequencyScore, hashtagPatternScore, detectedPatterns, accountAgeData, hashtagInsights, languagePatterns, passiveVoiceExamples, googleFactResponse) {
+function updateUI(botScore, misinfoScore, postingFrequencyScore, hashtagPatternScore, detectedPatterns, accountAgeData, hashtagInsights, languagePatterns, passiveVoiceExamples, googleFactResponse, sourceCredibilityScore, sourceDetails) {
   // Update bot likelihood
   botLikelihoodBar.style.width = botScore + '%';
   botLikelihoodValue.textContent = botScore + '% likelihood of bot activity';
@@ -170,6 +170,30 @@ function updateUI(botScore, misinfoScore, postingFrequencyScore, hashtagPatternS
       exampleItem.textContent = `"${example}"`;
       passiveExamplesList.appendChild(exampleItem);
     });
+    
+    // Award points for passive voice detection
+    chrome.runtime.sendMessage({
+      action: "awardPoints",
+      pointType: "PASSIVE_VOICE_DETECTED",
+      amount: passiveVoiceExamples.length * 5, // 5 points per example
+      details: { examples: passiveVoiceExamples.length }
+    }, function(response) {
+      if (response && response.success) {
+        // Update points display
+        if (userPointsElement) {
+          userPointsElement.textContent = response.totalPoints;
+        }
+        
+        // Show point reward notification
+        rewardsBox.style.display = 'block';
+        document.getElementById('reward-details').textContent = `+${response.pointsAwarded} points for passive voice detection!`;
+        
+        // Hide after 3 seconds
+        setTimeout(() => {
+          rewardsBox.style.display = 'none';
+        }, 3000);
+      }
+    });
   } else if (passiveVoiceContainer) {
     passiveVoiceContainer.style.display = 'none';
   }
@@ -217,6 +241,44 @@ function updateUI(botScore, misinfoScore, postingFrequencyScore, hashtagPatternS
     patternsContainer.appendChild(patternList);
   } else if (patternsContainer) {
     patternsContainer.style.display = 'none';
+  }
+  
+  // Display source credibility information if available
+  if (sourceDetails && sourceDetails.length > 0) {
+    // Award points for source validation
+    chrome.runtime.sendMessage({
+      action: "awardPoints",
+      pointType: "SOURCE_VALIDATED",
+      amount: sourceDetails.length * 5, // 5 points per source
+      details: { sources: sourceDetails.length }
+    }, function(response) {
+      if (response && response.success) {
+        // Update points display
+        if (userPointsElement) {
+          userPointsElement.textContent = response.totalPoints;
+        }
+        
+        // Show point reward notification
+        rewardsBox.style.display = 'block';
+        document.getElementById('reward-details').textContent = `+${response.pointsAwarded} points for checking ${sourceDetails.length} sources!`;
+        
+        // Hide after 3 seconds
+        setTimeout(() => {
+          rewardsBox.style.display = 'none';
+        }, 3000);
+      }
+    });
+    
+    // Check for low credibility sources
+    const lowCredibilitySources = sourceDetails.filter(source => source.score < 40);
+    if (lowCredibilitySources.length > 0) {
+      chrome.runtime.sendMessage({
+        action: "awardPoints",
+        pointType: "LOW_CREDIBILITY_SOURCE_IDENTIFIED",
+        amount: lowCredibilitySources.length * 5, // 5 points per low credibility source
+        details: { lowCredSources: lowCredibilitySources.length }
+      });
+    }
   }
   
   // Display account age information if available
@@ -407,18 +469,18 @@ function loadUserStats() {
   chrome.runtime.sendMessage({ action: "getUserStats" }, function(response) {
     if (response && response.success) {
       // Update points
-      if (userPointsElement && response.stats) {
-        userPointsElement.textContent = response.stats.points || 0;
+      if (userPointsElement && response.points) {
+        userPointsElement.textContent = response.points.total || 0;
       }
       
       // Update reports
-      if (userReportsElement && response.stats) {
-        userReportsElement.textContent = response.stats.reportsSubmitted || 0;
+      if (userReportsElement && response.userStats) {
+        userReportsElement.textContent = response.userStats.reportsSubmitted || 0;
       }
       
       // Update level
-      if (userLevelElement && response.stats && response.stats.level) {
-        userLevelElement.textContent = response.stats.level.name || 'Novice Detective';
+      if (userLevelElement && response.level) {
+        userLevelElement.textContent = response.level.title || 'Novice Detective';
       }
     } else {
       console.error("Failed to load user stats:", response ? response.error : "Unknown error");
@@ -725,7 +787,9 @@ function sendAnalyzeRequest(tab) {
           response.hashtagInsights,
           response.languagePatterns,
           response.passiveVoiceExamples,
-          response.googleFactResponse
+          response.googleFactResponse,
+          response.sourceCredibilityScore,
+          response.sourceDetails
         );
         
         // Set up event listeners for the action buttons
@@ -842,6 +906,75 @@ function initializeTabs() {
   challengesTab.addEventListener('click', () => switchTab(challengesTab));
   leaderboardTab.addEventListener('click', () => switchTab(leaderboardTab));
 }
+
+// Listen for points updates from background
+chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
+  if (message.action === "pointsUpdated") {
+    // Update the points display
+    if (userPointsElement) {
+      userPointsElement.textContent = message.totalPoints;
+    }
+    
+    // Show notification if there are points awarded
+    if (message.pointsAwarded && message.pointsAwarded > 0) {
+      // Format a nice message for the notification
+      let pointsMessage = `+${message.pointsAwarded} points`;
+      if (message.reason) {
+        switch (message.reason) {
+          case 'BOT_DETECTED':
+            pointsMessage += ' for bot detection!';
+            break;
+          case 'MISINFO_FLAGGED':
+            pointsMessage += ' for identifying misinformation!';
+            break;
+          case 'SOURCE_VALIDATED':
+            pointsMessage += ' for validating sources!';
+            break;
+          case 'PASSIVE_VOICE_DETECTED':
+            pointsMessage += ' for passive voice detection!';
+            break;
+          case 'LOW_CREDIBILITY_SOURCE_IDENTIFIED':
+            pointsMessage += ' for identifying low credibility sources!';
+            break;
+          case 'REPORT_SUBMITTED':
+            pointsMessage += ' for submitting a report!';
+            break;
+          case 'CHALLENGE_COMPLETED':
+            pointsMessage += ' for completing a challenge!';
+            break;
+          case 'BADGE_EARNED':
+            pointsMessage += ' for earning a badge!';
+            break;
+          default:
+            pointsMessage += '!';
+        }
+      }
+      
+      // Show the notification
+      rewardsBox.style.display = 'block';
+      document.getElementById('reward-details').textContent = pointsMessage;
+      
+      // Hide after 3 seconds
+      setTimeout(() => {
+        rewardsBox.style.display = 'none';
+      }, 3000);
+    }
+  } else if (message.action === "levelUp") {
+    // Update level display
+    if (userLevelElement) {
+      userLevelElement.textContent = message.title;
+    }
+    
+    // Show level up notification
+    rewardsBox.style.display = 'block';
+    document.getElementById('reward-details').textContent = `Level Up! You're now a ${message.title}!`;
+    
+    // Hide after 5 seconds (longer for level up)
+    setTimeout(() => {
+      rewardsBox.style.display = 'none';
+    }, 5000);
+  }
+});
 
 // Initialize UI when popup is opened
 document.addEventListener('DOMContentLoaded', function() {
