@@ -2,13 +2,16 @@
 <html>
 <head>
   <title>OctoPal - Twitter Analysis</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <div id="main-content">
     <div class="header">
       <h1><img src="images/icons/icon48.png" alt="OctoPal logo"> OctoPal</h1>
-      <div class="subtitle">Twitter/X Analysis Tool</div>
+      <div class="subtitle">Your Defender Against Misinformation</div>
     </div>
     
     <!-- User Stats Section -->
@@ -21,6 +24,9 @@
         <div class="stat-box">
           <div class="stat-label">Level</div>
           <div id="user-level" class="stat-value">Novice</div>
+          <div class="mini-progress-container">
+            <div class="mini-progress" id="user-level-progress"></div>
+          </div>
         </div>
         <div class="stat-box">
           <div class="stat-label">Reports</div>
@@ -35,6 +41,7 @@
         <button class="tab-btn active" id="analysis-tab">Analysis</button>
         <button class="tab-btn" id="badges-tab">Badges</button>
         <button class="tab-btn" id="challenges-tab">Challenges</button>
+        <button class="tab-btn" id="levels-tab">Levels</button>
         <button class="tab-btn" id="leaderboard-tab">Leaderboard</button>
       </div>
       
@@ -101,12 +108,12 @@
             <div id="hashtag-insights" style="display: none;"></div>
             
             <div id="language-patterns" style="display: none;">
-              <h4><span class="suspicious-icon">🔍</span> Suspicious Language Patterns:</h4>
+              <h4>Suspicious Language Patterns:</h4>
               <ul id="language-patterns-list"></ul>
             </div>
             
             <div id="passive-voice-container" style="display: none;">
-              <h4><span class="passive-icon">✍️</span> Passive Voice Detected:</h4>
+              <h4>Passive Voice Detected:</h4>
               <ul id="passive-examples-list"></ul>
               <p class="passive-explanation">Passive voice can be used to obscure responsibility or source of information.</p>
             </div>
@@ -152,14 +159,96 @@
         <!-- Challenges Tab -->
         <div id="challenges-content" class="content-section">
           <h3>Current Challenges</h3>
+          
           <div id="daily-challenges-container">
-            <h4>Daily Challenges</h4>
+            <div class="challenge-header">
+              <h4>Daily Challenge</h4>
+              <div id="daily-streak-container" class="streak-counter" style="display: none;">
+                <span class="streak-flame">🔥</span>
+                <span id="daily-streak">0</span>
+                <span class="streak-text">day streak</span>
+              </div>
+            </div>
             <div id="daily-challenges" class="challenges-list"></div>
           </div>
           
           <div id="weekly-challenges-container">
-            <h4>Weekly Challenges</h4>
+            <div class="challenge-header">
+              <h4>Weekly Challenge</h4>
+              <div id="weekly-streak-container" class="streak-counter" style="display: none;">
+                <span class="streak-flame">🔥</span>
+                <span id="weekly-streak">0</span>
+                <span class="streak-text">week streak</span>
+              </div>
+            </div>
             <div id="weekly-challenges" class="challenges-list"></div>
+          </div>
+          
+          <div id="special-challenges-container" style="display: none;">
+            <div class="challenge-header">
+              <h4>Special Challenge</h4>
+              <span class="special-badge">Limited Time</span>
+            </div>
+            <div id="special-challenges" class="challenges-list"></div>
+          </div>
+          
+          <div id="completed-challenges-container">
+            <div id="completed-challenges" class="completed-challenges-list"></div>
+          </div>
+          
+          <div class="challenges-info">
+            <div class="info-icon">ℹ️</div>
+            <div class="info-text">Complete challenges to earn points and build streaks. Higher streaks give bonus multipliers for rewards!</div>
+          </div>
+        </div>
+        
+        <!-- Levels Tab -->
+        <div id="levels-content" class="content-section">
+          <h3>Your Detective Journey</h3>
+          
+          <div class="current-level-container">
+            <div class="current-level-info">
+              <h4>Current Level: <span id="current-level-title">Novice Detective</span></h4>
+              <div class="level-number">Level <span id="current-level-number">1</span></div>
+              <div class="level-progress-text">
+                <span id="level-progress-percent">0%</span> to next level
+                (<span id="level-current-points">0</span>/<span id="level-next-threshold">100</span> points)
+              </div>
+            </div>
+            <div class="level-progress-container">
+              <div class="level-progress-bar">
+                <div class="level-progress" id="level-progress-bar"></div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="level-rewards-container">
+            <h4>Level Up Rewards</h4>
+            <div class="level-reward-item">
+              <span class="reward-icon">🔓</span>
+              <div class="reward-info">
+                <div class="reward-title">Exclusive Badges</div>
+                <div class="reward-description">Unlock special badges only available at higher levels</div>
+              </div>
+            </div>
+            <div class="level-reward-item">
+              <span class="reward-icon">⚡</span>
+              <div class="reward-info">
+                <div class="reward-title">Point Multipliers</div>
+                <div class="reward-description">Earn more points per action at higher levels</div>
+              </div>
+            </div>
+            <div class="level-reward-item">
+              <div class="reward-info">
+                <div class="reward-title">Rank Recognition</div>
+                <div class="reward-description">Show off your detective title on the leaderboard</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="levels-path-container">
+            <h4>Level Progression Path</h4>
+            <div id="levels-path" class="levels-path"></div>
           </div>
         </div>
         
@@ -181,7 +270,7 @@
     
     <!-- Rewards Notification Box -->
     <div id="rewards-notification" style="display: none;">
-      <div class="reward-icon">🏆</div>
+      <img src="images/icons/fireworks.png" alt="Celebration" class="reward-fireworks">
       <div id="reward-details"></div>
     </div>
     

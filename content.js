@@ -758,7 +758,7 @@ function analyzeTweetForBotPatterns(tweetElement) {
     // Check for default-looking usernames
     if (/[a-zA-Z]+\d{6,}/.test(usernameText)) {
       score += 15;
-    }
+  }
   }
   
   // 3. Check posting frequency (now handled by analyzePostingFrequency)
@@ -946,7 +946,7 @@ function analyzeTweetForMisinformation(tweetElement) {
   if (!tweetTextElement) return { score: Math.floor(Math.random() * 30), patterns: [], passiveExamples: [] }; // Return random score if no text
   
   const tweetText = tweetTextElement.textContent || '';
-
+  
   // 1. Check for excessive capitalization (often used in misleading content)
   const uppercaseRatio = (tweetText.replace(/[^A-Z]/g, '').length) / 
                           (tweetText.replace(/[^A-Za-z]/g, '').length || 1);

@@ -464,23 +464,19 @@ function showError(message) {
   console.error('OctoPal Error:', message);
 }
 
-// Load user stats from background script
+// Load user stats
 function loadUserStats() {
   chrome.runtime.sendMessage({ action: "getUserStats" }, function(response) {
     if (response && response.success) {
-      // Update points
-      if (userPointsElement && response.points) {
-        userPointsElement.textContent = response.points.total || 0;
-      }
+      // Update UI with user stats
+      document.getElementById('user-points').textContent = response.points.total || 0;
+      document.getElementById('user-reports').textContent = response.userStats.reportsSubmitted || 0;
+      document.getElementById('user-level').textContent = response.level.title || 'Novice';
       
-      // Update reports
-      if (userReportsElement && response.userStats) {
-        userReportsElement.textContent = response.userStats.reportsSubmitted || 0;
-      }
-      
-      // Update level
-      if (userLevelElement && response.level) {
-        userLevelElement.textContent = response.level.title || 'Novice Detective';
+      // Update mini level progress bar
+      const miniProgressBar = document.getElementById('user-level-progress');
+      if (miniProgressBar) {
+        miniProgressBar.style.width = `${response.level.progress || 0}%`;
       }
     } else {
       console.error("Failed to load user stats:", response ? response.error : "Unknown error");
@@ -632,29 +628,6 @@ function createBadgeElement(badge, earned, progressPercent, earnedDate, currentP
   return badgeElement;
 }
 
-// Load challenges
-function loadChallenges() {
-  chrome.runtime.sendMessage({ action: "getChallenges" }, function(response) {
-    if (response && response.success) {
-      // For daily challenges
-      if (response.challenges && response.challenges.active && response.challenges.active.daily) {
-        const dailyChallenges = [response.challenges.active.daily];
-        const dailyProgress = response.challenges.dailyProgress || {};
-        displayChallenges(dailyChallenges, dailyProgress, 'daily-challenges');
-      }
-      
-      // For weekly challenges
-      if (response.challenges && response.challenges.active && response.challenges.active.weekly) {
-        const weeklyChallenges = [response.challenges.active.weekly];
-        const weeklyProgress = response.challenges.weeklyProgress || {};
-        displayChallenges(weeklyChallenges, weeklyProgress, 'weekly-challenges');
-      }
-    } else {
-      console.error("Failed to load challenges:", response ? response.error : "Unknown error");
-    }
-  });
-}
-
 // Display challenges in the UI
 function displayChallenges(challenges, progressData, containerId) {
   const container = document.getElementById(containerId);
@@ -668,9 +641,25 @@ function displayChallenges(challenges, progressData, containerId) {
     const challengeElement = document.createElement('div');
     challengeElement.className = 'challenge-item';
     
+    // Add difficulty indicator if available
+    if (challenge.difficulty) {
+      challengeElement.classList.add(`difficulty-${challenge.difficulty.name.toLowerCase()}`);
+    }
+    
     const titleElement = document.createElement('div');
     titleElement.className = 'challenge-title';
-    titleElement.textContent = challenge.name;
+    
+    // Add difficulty icon if available
+    if (challenge.difficulty && challenge.difficulty.icon) {
+      const difficultyIcon = document.createElement('span');
+      difficultyIcon.className = 'difficulty-icon';
+      difficultyIcon.textContent = challenge.difficulty.icon;
+      titleElement.appendChild(difficultyIcon);
+    }
+    
+    const titleText = document.createElement('span');
+    titleText.textContent = challenge.name;
+    titleElement.appendChild(titleText);
     
     const descElement = document.createElement('div');
     descElement.className = 'challenge-description';
@@ -678,11 +667,11 @@ function displayChallenges(challenges, progressData, containerId) {
     
     // Calculate progress
     const currentProgress = progressData[challenge.id] || 0;
-    const progressPercent = Math.min(100, (currentProgress / challenge.requirement) * 100);
+    const progressPercent = Math.min(100, Math.round((currentProgress / challenge.requirement) * 100));
     
     const progressText = document.createElement('div');
     progressText.className = 'challenge-progress-text';
-    progressText.textContent = `Progress: ${currentProgress}/${challenge.requirement}`;
+    progressText.innerHTML = `Progress: <strong>${currentProgress}/${challenge.requirement}</strong>`;
     
     const progressContainer = document.createElement('div');
     progressContainer.className = 'challenge-progress';
@@ -691,11 +680,71 @@ function displayChallenges(challenges, progressData, containerId) {
     progressBar.className = 'challenge-progress-bar';
     progressBar.style.width = `${progressPercent}%`;
     
+    // Add progress percentage
+    const progressPercentElement = document.createElement('span');
+    progressPercentElement.className = 'progress-percent';
+    progressPercentElement.textContent = `${progressPercent}%`;
+    progressText.appendChild(progressPercentElement);
+    
     progressContainer.appendChild(progressBar);
     
     const rewardElement = document.createElement('div');
     rewardElement.className = 'challenge-reward';
-    rewardElement.innerHTML = `<span class="reward-icon">🏆</span> Reward: ${challenge.reward} points`;
+    rewardElement.textContent = `Reward: ${challenge.reward} points`;
+    
+    // Check if streak-based and add indicator
+    if (challenge.streakBased) {
+      const streakIcon = document.createElement('span');
+      streakIcon.className = 'streak-icon';
+      streakIcon.textContent = '🔥';
+      streakIcon.title = 'Streak Challenge';
+      
+      const streakLabel = document.createElement('span');
+      streakLabel.className = 'streak-label';
+      streakLabel.textContent = 'Streak';
+      
+      const streakContainer = document.createElement('div');
+      streakContainer.className = 'streak-container';
+      streakContainer.appendChild(streakIcon);
+      streakContainer.appendChild(streakLabel);
+      
+      rewardElement.appendChild(streakContainer);
+    }
+    
+    const rewardIcon = document.createElement('span');
+    rewardIcon.className = 'reward-icon';
+    rewardIcon.textContent = '★';
+    
+    const rewardValue = document.createElement('span');
+    rewardValue.className = 'reward-value';
+    
+    // Format reward with multiplier if available
+    let rewardText = `${challenge.reward} points`;
+    if (challenge.difficulty && challenge.difficulty.multiplier > 1) {
+      rewardText = `${challenge.reward} points (${challenge.difficulty.multiplier}x multiplier)`;
+    }
+    rewardValue.textContent = rewardText;
+    
+    rewardElement.appendChild(rewardIcon);
+    rewardElement.appendChild(rewardValue);
+    
+    // Add expiration for special challenges
+    if (challenge.expiresAt) {
+      const expirationDate = new Date(challenge.expiresAt);
+      const now = new Date();
+      const daysLeft = Math.ceil((expirationDate - now) / (1000 * 60 * 60 * 24));
+      
+      const expirationElement = document.createElement('div');
+      expirationElement.className = 'challenge-expiration';
+      expirationElement.innerHTML = `<span class="expiration-icon">⏱️</span> Expires in <strong>${daysLeft} day${daysLeft !== 1 ? 's' : ''}</strong>`;
+      
+      // Add warning class if expiring soon
+      if (daysLeft <= 2) {
+        expirationElement.classList.add('expiring-soon');
+      }
+      
+      challengeElement.appendChild(expirationElement);
+    }
     
     challengeElement.appendChild(titleElement);
     challengeElement.appendChild(descElement);
@@ -704,6 +753,184 @@ function displayChallenges(challenges, progressData, containerId) {
     challengeElement.appendChild(rewardElement);
     
     container.appendChild(challengeElement);
+  });
+}
+
+// Load challenges
+function loadChallenges() {
+  const dailyContainer = document.getElementById('daily-challenges');
+  const weeklyContainer = document.getElementById('weekly-challenges');
+  const specialContainer = document.getElementById('special-challenges');
+  
+  if (dailyContainer) {
+    dailyContainer.innerHTML = '<div class="loading-indicator">Loading challenges...</div>';
+  }
+  if (weeklyContainer) {
+    weeklyContainer.innerHTML = '<div class="loading-indicator">Loading challenges...</div>';
+  }
+  
+  chrome.runtime.sendMessage({ action: "getChallenges" }, function(response) {
+    if (response && response.success) {
+      // For daily challenges
+      if (response.challenges && response.challenges.active && response.challenges.active.daily) {
+        const dailyChallenges = [response.challenges.active.daily];
+        const dailyProgress = response.challenges.dailyProgress || {};
+        displayChallenges(dailyChallenges, dailyProgress, 'daily-challenges');
+        
+        // Display streak if available
+        const streakElement = document.getElementById('daily-streak');
+        if (streakElement && response.challenges.streaks) {
+          const streak = response.challenges.streaks.dailyChallengeCompleted || 0;
+          streakElement.textContent = streak;
+          
+          // Show/hide streak container based on streak value
+          const streakContainer = document.getElementById('daily-streak-container');
+          if (streakContainer) {
+            streakContainer.style.display = streak > 0 ? 'flex' : 'none';
+          }
+        }
+      }
+      
+      // For weekly challenges
+      if (response.challenges && response.challenges.active && response.challenges.active.weekly) {
+        const weeklyChallenges = [response.challenges.active.weekly];
+        const weeklyProgress = response.challenges.weeklyProgress || {};
+        displayChallenges(weeklyChallenges, weeklyProgress, 'weekly-challenges');
+        
+        // Display streak if available
+        const streakElement = document.getElementById('weekly-streak');
+        if (streakElement && response.challenges.streaks) {
+          const streak = response.challenges.streaks.weeklyChallengeCompleted || 0;
+          streakElement.textContent = streak;
+          
+          // Show/hide streak container based on streak value
+          const streakContainer = document.getElementById('weekly-streak-container');
+          if (streakContainer) {
+            streakContainer.style.display = streak > 0 ? 'flex' : 'none';
+          }
+        }
+      }
+      
+      // For special challenges - only show if available
+      if (response.challenges && response.challenges.active && response.challenges.active.special) {
+        const specialChallenges = [response.challenges.active.special];
+        const specialProgress = response.challenges.specialProgress || {};
+        
+        // Make sure the special challenges container exists
+        const specialChallengesContainer = document.getElementById('special-challenges-container');
+        if (specialChallengesContainer) {
+          specialChallengesContainer.style.display = 'block';
+          displayChallenges(specialChallenges, specialProgress, 'special-challenges');
+        }
+      } else {
+        // Hide special challenges section if no special challenge is active
+        const specialChallengesContainer = document.getElementById('special-challenges-container');
+        if (specialChallengesContainer) {
+          specialChallengesContainer.style.display = 'none';
+        }
+      }
+      
+      // Display history of completed challenges if available
+      if (response.challenges && response.challenges.history && response.challenges.history.length > 0) {
+        updateCompletedChallenges(response.challenges.history);
+      }
+    } else {
+      console.error("Failed to load challenges:", response ? response.error : "Unknown error");
+      
+      // Show error message in containers
+      if (dailyContainer) {
+        dailyContainer.innerHTML = '<div class="error-message">Failed to load challenges. Try again later.</div>';
+      }
+      if (weeklyContainer) {
+        weeklyContainer.innerHTML = '<div class="error-message">Failed to load challenges. Try again later.</div>';
+      }
+    }
+  });
+}
+
+// Update completed challenges history
+function updateCompletedChallenges(completedChallengeIds) {
+  const completedContainer = document.getElementById('completed-challenges');
+  if (!completedContainer) return;
+  
+  // Check if we already have this information displayed
+  if (completedContainer.dataset.loaded === 'true' && 
+      completedContainer.dataset.count == completedChallengeIds.length) {
+    return;
+  }
+  
+  // Mark as loaded with current count
+  completedContainer.dataset.loaded = 'true';
+  completedContainer.dataset.count = completedChallengeIds.length;
+  
+  // Only show the last 5 completed challenges
+  const recentCompletedIds = completedChallengeIds.slice(-5);
+  
+  // Get all challenge definitions
+  chrome.runtime.sendMessage({ action: "getAllChallengeDefinitions" }, function(response) {
+    if (response && response.success) {
+      const allChallenges = [
+        ...(response.dailyChallenges || []),
+        ...(response.weeklyChallenges || []),
+        ...(response.specialChallenges || [])
+      ];
+      
+      // Find completed challenge details
+      const completedChallenges = recentCompletedIds
+        .map(id => allChallenges.find(c => c.id === id))
+        .filter(c => c !== undefined);
+      
+      // Display completed challenges
+      if (completedChallenges.length > 0) {
+        completedContainer.innerHTML = '';
+        
+        const headerElement = document.createElement('h4');
+        headerElement.textContent = 'Recently Completed';
+        completedContainer.appendChild(headerElement);
+        
+        completedChallenges.forEach(challenge => {
+          const challengeElement = document.createElement('div');
+          challengeElement.className = 'challenge-item completed';
+          
+          const titleElement = document.createElement('div');
+          titleElement.className = 'challenge-title';
+          
+          // Add difficulty icon if available
+          if (challenge.difficulty && challenge.difficulty.icon) {
+            const difficultyIcon = document.createElement('span');
+            difficultyIcon.className = 'difficulty-icon';
+            difficultyIcon.textContent = challenge.difficulty.icon;
+            titleElement.appendChild(difficultyIcon);
+          }
+          
+          const titleText = document.createElement('span');
+          titleText.textContent = challenge.name;
+          titleElement.appendChild(titleText);
+          
+          const completedIcon = document.createElement('span');
+          completedIcon.className = 'completed-icon';
+          completedIcon.textContent = '✓';
+          titleElement.appendChild(completedIcon);
+          
+          const descElement = document.createElement('div');
+          descElement.className = 'challenge-description';
+          descElement.textContent = challenge.description;
+          
+          const rewardElement = document.createElement('div');
+          rewardElement.className = 'challenge-reward';
+          rewardElement.textContent = `Reward: ${challenge.reward} points`;
+          
+          challengeElement.appendChild(titleElement);
+          challengeElement.appendChild(descElement);
+          challengeElement.appendChild(rewardElement);
+          
+          completedContainer.appendChild(challengeElement);
+        });
+      } else {
+        // No completed challenges
+        completedContainer.innerHTML = '<div class="empty-state">No challenges completed yet. Complete challenges to see them here!</div>';
+      }
+    }
   });
 }
 
@@ -977,14 +1204,37 @@ Check it out yourself!`;
 
 // Initialize tabs when popup loads
 function initializeTabs() {
-  // Set the analysis tab as active by default
-  switchTab(analysisTab);
+  const tabs = document.querySelectorAll('.tab-btn');
+  const contentSections = document.querySelectorAll('.content-section');
   
-  // Add event listeners to tab buttons
-  analysisTab.addEventListener('click', () => switchTab(analysisTab));
-  badgesTab.addEventListener('click', () => switchTab(badgesTab));
-  challengesTab.addEventListener('click', () => switchTab(challengesTab));
-  leaderboardTab.addEventListener('click', () => switchTab(leaderboardTab));
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      // Remove active class from all tabs and content sections
+      tabs.forEach(t => t.classList.remove('active'));
+      contentSections.forEach(c => c.classList.remove('active'));
+      
+      // Add active class to clicked tab
+      tab.classList.add('active');
+      
+      // Show corresponding content section
+      const targetId = tab.id.replace('-tab', '-content');
+      const targetContent = document.getElementById(targetId);
+      if (targetContent) {
+        targetContent.classList.add('active');
+      }
+      
+      // Load content based on active tab
+      if (tab.id === 'badges-tab') {
+        loadBadges();
+      } else if (tab.id === 'challenges-tab') {
+        loadChallenges();
+      } else if (tab.id === 'leaderboard-tab') {
+        loadLeaderboard();
+      } else if (tab.id === 'levels-tab') {
+        loadLevelDetails();
+      }
+    });
+  });
 }
 
 // Listen for messages from background
@@ -1127,14 +1377,174 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   }
 });
 
-// Initialize UI when popup is opened
+// Initialize event listeners when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
+  // Load user stats first
+  loadUserStats();
+  
   // Initialize tabs
   initializeTabs();
   
-  // Load user stats
-  loadUserStats();
-  
-  // Load analysis data for the current page
+  // Update UI based on the active tab
   refreshUI();
+});
+
+// Load level details and create level progression path
+function loadLevelDetails() {
+  chrome.runtime.sendMessage({ action: "getLevelDetails" }, function(response) {
+    if (response && response.success) {
+      updateLevelProgressUI(response.level, response.points, response.allLevels);
+      createLevelProgressionPath(response.level.current, response.points.total, response.allLevels);
+    } else {
+      console.error("Failed to load level details:", response ? response.error : "Unknown error");
+    }
+  });
+}
+
+// Update level progress UI
+function updateLevelProgressUI(level, points, allLevels) {
+  // Update current level info
+  document.getElementById('current-level-title').textContent = level.title;
+  document.getElementById('current-level-number').textContent = level.current;
+  document.getElementById('level-progress-percent').textContent = level.progress + '%';
+  document.getElementById('level-current-points').textContent = points.total;
+  document.getElementById('level-next-threshold').textContent = level.nextThreshold;
+  
+  // Update progress bar
+  const progressBar = document.getElementById('level-progress-bar');
+  progressBar.style.width = level.progress + '%';
+  
+  // Update user level in the stats bar
+  const userLevelElement = document.getElementById('user-level');
+  if (userLevelElement) {
+    userLevelElement.textContent = level.title;
+    
+    // Add animation if it was just updated
+    if (userLevelElement.dataset.previousLevel && 
+        parseInt(userLevelElement.dataset.previousLevel) < level.current) {
+      userLevelElement.classList.add('level-up-animation');
+      setTimeout(() => {
+        userLevelElement.classList.remove('level-up-animation');
+      }, 1000);
+    }
+    
+    // Store current level for comparison on next update
+    userLevelElement.dataset.previousLevel = level.current;
+  }
+}
+
+// Create level progression path visualization
+function createLevelProgressionPath(currentLevel, totalPoints, allLevels) {
+  const levelsPath = document.getElementById('levels-path');
+  if (!levelsPath) return;
+  
+  // Clear existing content
+  levelsPath.innerHTML = '';
+  
+  // Create elements for each level
+  allLevels.forEach(levelData => {
+    const levelItem = document.createElement('div');
+    levelItem.className = 'level-path-item';
+    
+    // Determine if level is completed, current, or future
+    if (levelData.level < currentLevel) {
+      levelItem.classList.add('completed');
+    } else if (levelData.level === currentLevel) {
+      levelItem.classList.add('current');
+    } else {
+      levelItem.classList.add('future');
+    }
+    
+    // Create level number badge
+    const levelBadge = document.createElement('span');
+    levelBadge.className = 'level-number-badge';
+    levelBadge.textContent = levelData.level;
+    
+    // Create level title
+    const levelTitle = document.createElement('span');
+    levelTitle.className = 'level-title';
+    levelTitle.textContent = levelData.title;
+    
+    // Create level threshold
+    const levelThreshold = document.createElement('div');
+    levelThreshold.className = 'level-threshold';
+    
+    // Format threshold text based on level status
+    if (levelData.level < currentLevel) {
+      levelThreshold.textContent = `Completed (${levelData.threshold} points)`;
+    } else if (levelData.level === currentLevel) {
+      const pointsToNext = levelData.level < allLevels.length ? 
+                         allLevels[levelData.level].threshold - totalPoints :
+                         'Max level reached';
+      levelThreshold.textContent = `Progress: ${totalPoints - levelData.threshold}/${allLevels[levelData.level].threshold - levelData.threshold} points`;
+    } else {
+      levelThreshold.textContent = `Required: ${levelData.threshold} points`;
+    }
+    
+    // Add elements to level item
+    levelItem.appendChild(levelBadge);
+    levelItem.appendChild(levelTitle);
+    levelItem.appendChild(document.createElement('br'));
+    levelItem.appendChild(levelThreshold);
+    
+    // Add level item to path
+    levelsPath.appendChild(levelItem);
+  });
+}
+
+// Handle level up notification
+function showLevelUpNotification(oldLevel, newLevel, newTitle) {
+  // Create notification element
+  const notification = document.createElement('div');
+  notification.className = 'level-up-notification';
+  
+  // Add icon
+  const icon = document.createElement('div');
+  icon.className = 'level-up-icon';
+  icon.textContent = '🎖️';
+  notification.appendChild(icon);
+  
+  // Add details
+  const details = document.createElement('div');
+  details.className = 'level-up-details';
+  
+  const title = document.createElement('div');
+  title.className = 'level-up-title';
+  title.textContent = `Level Up! Level ${oldLevel} → ${newLevel}`;
+  details.appendChild(title);
+  
+  const message = document.createElement('div');
+  message.className = 'level-up-message';
+  message.textContent = `Congratulations! You've reached ${newTitle}`;
+  details.appendChild(message);
+  
+  notification.appendChild(details);
+  
+  // Find container and add notification
+  const container = document.querySelector('.tab-content');
+  if (container) {
+    container.prepend(notification);
+    
+    // Remove after 5 seconds
+    setTimeout(() => {
+      notification.style.opacity = '0';
+      notification.style.transform = 'translateY(-20px)';
+      notification.style.transition = 'opacity 0.5s, transform 0.5s';
+      
+      setTimeout(() => {
+        notification.remove();
+      }, 500);
+    }, 5000);
+  }
+}
+
+// Listen for level up messages
+chrome.runtime.onMessage.addListener(function(message) {
+  if (message.action === "levelUp") {
+    showLevelUpNotification(message.oldLevel, message.newLevel, message.title);
+    
+    // Update user stats to reflect new level
+    loadUserStats();
+    loadLevelDetails();
+  }
 }); 
