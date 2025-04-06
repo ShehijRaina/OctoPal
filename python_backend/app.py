@@ -31,7 +31,7 @@ def FactCheck(query):
     print(f'Query is {query}')
 
     payload = {
-    'key': 'AIzaSyC7gwEzB-EN6A_FFXo7XVfEsjmTMe6_yek',
+    'key': 'YOUR_API_KEY',
     'query':query
     }
     url ='https://factchecktools.googleapis.com/v1alpha1/claims:search'
