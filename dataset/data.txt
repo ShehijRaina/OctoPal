@@ -1,0 +1,1 @@
+The data to train this logistic regression model was sourced from Kaggle (https://www.kaggle.com/datasets/emineyetm/fake-news-detection-datasets?resource=download).
