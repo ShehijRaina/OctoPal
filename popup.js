@@ -866,6 +866,12 @@ function sendAnalyzeRequest(tab) {
           response.sourceDetails
         );
         
+        // Show the ongoing analysis indicator
+        const ongoingAnalysisIndicator = document.getElementById('ongoing-analysis-indicator');
+        if (ongoingAnalysisIndicator) {
+          ongoingAnalysisIndicator.style.display = 'flex';
+        }
+        
         // Set up event listeners for the action buttons
         setupActionButtons(tab, response);
       } else if (response && response.error) {
@@ -1076,6 +1082,48 @@ chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
     setTimeout(() => {
       rewardsBox.style.display = 'none';
     }, 5000);
+  } else if (message.action === "analysisUpdated") {
+    // Handle updated analysis results from content script
+    console.log("OctoPal: Received updated analysis from content script");
+    
+    // Only update if we're currently showing analysis results
+    if (analysisResults.style.display === 'block') {
+      // Show a brief notification that analysis has been updated
+      const analysisUpdateNotice = document.createElement('div');
+      analysisUpdateNotice.className = 'analysis-update-notice';
+      analysisUpdateNotice.textContent = '🔄 Analysis updated with new tweets';
+      
+      // Add the notice to the DOM
+      const mainContent = document.getElementById('main-content');
+      mainContent.appendChild(analysisUpdateNotice);
+      
+      // Remove the notice after 2 seconds
+      setTimeout(() => {
+        mainContent.removeChild(analysisUpdateNotice);
+      }, 2000);
+      
+      // Update the UI with the new results
+      if (message.results) {
+        updateUI(
+          message.results.botScore,
+          message.results.misinfoScore,
+          message.results.postingFrequencyScore,
+          message.results.hashtagPatternScore,
+          message.results.detectedPatterns,
+          message.results.accountAgeData,
+          message.results.hashtagInsights,
+          message.results.languagePatterns,
+          message.results.passiveVoiceExamples,
+          message.results.googleFactResponse,
+          message.results.sourceCredibilityScore,
+          message.results.sourceDetails
+        );
+      }
+    }
+    
+    // Always respond to let the content script know we received the message
+    sendResponse({ success: true });
+    return true;
   }
 });
 
