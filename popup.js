@@ -85,7 +85,7 @@ function switchTab(activeTab) {
 }
 
 // Update UI with scores
-function updateUI(botScore, misinfoScore, postingFrequencyScore, hashtagPatternScore, detectedPatterns, accountAgeData, hashtagInsights, languagePatterns, passiveVoiceExamples, googleFactResponse) {
+function updateUI(botScore, misinfoScore, postingFrequencyScore, hashtagPatternScore, detectedPatterns, accountAgeData, hashtagInsights, languagePatterns, passiveVoiceExamples, googleFactResponse, sourceCredibilityScore, sourceDetails) {
   // Update bot likelihood
   botLikelihoodBar.style.width = botScore + '%';
   botLikelihoodValue.textContent = botScore + '% likelihood of bot activity';
@@ -170,6 +170,30 @@ function updateUI(botScore, misinfoScore, postingFrequencyScore, hashtagPatternS
       exampleItem.textContent = `"${example}"`;
       passiveExamplesList.appendChild(exampleItem);
     });
+    
+    // Award points for passive voice detection
+    chrome.runtime.sendMessage({
+      action: "awardPoints",
+      pointType: "PASSIVE_VOICE_DETECTED",
+      amount: passiveVoiceExamples.length * 5, // 5 points per example
+      details: { examples: passiveVoiceExamples.length }
+    }, function(response) {
+      if (response && response.success) {
+        // Update points display
+        if (userPointsElement) {
+          userPointsElement.textContent = response.totalPoints;
+        }
+        
+        // Show point reward notification
+        rewardsBox.style.display = 'block';
+        document.getElementById('reward-details').textContent = `+${response.pointsAwarded} points for passive voice detection!`;
+        
+        // Hide after 3 seconds
+        setTimeout(() => {
+          rewardsBox.style.display = 'none';
+        }, 3000);
+      }
+    });
   } else if (passiveVoiceContainer) {
     passiveVoiceContainer.style.display = 'none';
   }
@@ -217,6 +241,44 @@ function updateUI(botScore, misinfoScore, postingFrequencyScore, hashtagPatternS
     patternsContainer.appendChild(patternList);
   } else if (patternsContainer) {
     patternsContainer.style.display = 'none';
+  }
+  
+  // Display source credibility information if available
+  if (sourceDetails && sourceDetails.length > 0) {
+    // Award points for source validation
+    chrome.runtime.sendMessage({
+      action: "awardPoints",
+      pointType: "SOURCE_VALIDATED",
+      amount: sourceDetails.length * 5, // 5 points per source
+      details: { sources: sourceDetails.length }
+    }, function(response) {
+      if (response && response.success) {
+        // Update points display
+        if (userPointsElement) {
+          userPointsElement.textContent = response.totalPoints;
+        }
+        
+        // Show point reward notification
+        rewardsBox.style.display = 'block';
+        document.getElementById('reward-details').textContent = `+${response.pointsAwarded} points for checking ${sourceDetails.length} sources!`;
+        
+        // Hide after 3 seconds
+        setTimeout(() => {
+          rewardsBox.style.display = 'none';
+        }, 3000);
+      }
+    });
+    
+    // Check for low credibility sources
+    const lowCredibilitySources = sourceDetails.filter(source => source.score < 40);
+    if (lowCredibilitySources.length > 0) {
+      chrome.runtime.sendMessage({
+        action: "awardPoints",
+        pointType: "LOW_CREDIBILITY_SOURCE_IDENTIFIED",
+        amount: lowCredibilitySources.length * 5, // 5 points per low credibility source
+        details: { lowCredSources: lowCredibilitySources.length }
+      });
+    }
   }
   
   // Display account age information if available
@@ -407,18 +469,18 @@ function loadUserStats() {
   chrome.runtime.sendMessage({ action: "getUserStats" }, function(response) {
     if (response && response.success) {
       // Update points
-      if (userPointsElement && response.stats) {
-        userPointsElement.textContent = response.stats.points || 0;
+      if (userPointsElement && response.points) {
+        userPointsElement.textContent = response.points.total || 0;
       }
       
       // Update reports
-      if (userReportsElement && response.stats) {
-        userReportsElement.textContent = response.stats.reportsSubmitted || 0;
+      if (userReportsElement && response.userStats) {
+        userReportsElement.textContent = response.userStats.reportsSubmitted || 0;
       }
       
       // Update level
-      if (userLevelElement && response.stats && response.stats.level) {
-        userLevelElement.textContent = response.stats.level.name || 'Novice Detective';
+      if (userLevelElement && response.level) {
+        userLevelElement.textContent = response.level.title || 'Novice Detective';
       }
     } else {
       console.error("Failed to load user stats:", response ? response.error : "Unknown error");
@@ -441,39 +503,83 @@ function loadBadges() {
 function displayBadges(allBadges, earnedBadges) {
   const earnedBadgesContainer = document.getElementById('earned-badges');
   const badgesToEarnContainer = document.getElementById('badges-to-earn');
+  const recentBadgesContainer = document.getElementById('recent-badges');
   const noEarnedBadgesMsg = document.getElementById('no-earned-badges');
+  const noRecentBadgesMsg = document.getElementById('no-recent-badges');
   
   // Clear existing content
   earnedBadgesContainer.innerHTML = '';
   badgesToEarnContainer.innerHTML = '';
+  recentBadgesContainer.innerHTML = '';
   
-  if (!earnedBadges || earnedBadges.length === 0) {
-    noEarnedBadgesMsg.style.display = 'block';
-  } else {
-    noEarnedBadgesMsg.style.display = 'none';
-    
-    // Add each earned badge
-    earnedBadges.forEach(badgeId => {
-      // Find the badge details from allBadges
-      const badge = Object.values(allBadges).find(b => b.id === badgeId);
-      if (badge) {
-        const badgeElement = createBadgeElement(badge, true);
-        earnedBadgesContainer.appendChild(badgeElement);
+  // Get badge progress data
+  chrome.runtime.sendMessage({ action: "getBadgeProgress" }, function(response) {
+    if (response && response.success) {
+      const badgeProgress = response.badgeProgress || {};
+      const earnedDates = response.earnedDates || {};
+      
+      // Keep track of recent badges
+      const recentBadges = [];
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      
+      if (!earnedBadges || earnedBadges.length === 0) {
+        noEarnedBadgesMsg.style.display = 'block';
+        noRecentBadgesMsg.style.display = 'block';
+      } else {
+        noEarnedBadgesMsg.style.display = 'none';
+        
+        // Add each earned badge
+        earnedBadges.forEach(badgeId => {
+          // Find the badge details from allBadges
+          const badge = Object.values(allBadges).find(b => b.id === badgeId);
+          if (badge) {
+            const earnedDate = earnedDates[badgeId] ? new Date(earnedDates[badgeId]) : null;
+            const badgeElement = createBadgeElement(badge, true, 100, earnedDates[badgeId]);
+            earnedBadgesContainer.appendChild(badgeElement);
+            
+            // Check if this is a recent badge (earned in the last 7 days)
+            if (earnedDate && earnedDate > sevenDaysAgo) {
+              recentBadges.push({badge, earnedDate});
+            }
+          }
+        });
+        
+        // Display recent badges
+        if (recentBadges.length > 0) {
+          noRecentBadgesMsg.style.display = 'none';
+          
+          // Sort recent badges by date (newest first)
+          recentBadges.sort((a, b) => b.earnedDate - a.earnedDate);
+          
+          // Display up to 3 recent badges
+          recentBadges.slice(0, 3).forEach(({badge, earnedDate}) => {
+            const badgeElement = createBadgeElement(badge, true, 100, earnedDate.toISOString());
+            badgeElement.classList.add('recent-badge');
+            recentBadgesContainer.appendChild(badgeElement);
+          });
+        } else {
+          noRecentBadgesMsg.style.display = 'block';
+        }
       }
-    });
-  }
-  
-  // Add badges that can be earned
-  Object.values(allBadges).forEach(badge => {
-    if (!earnedBadges || !earnedBadges.includes(badge.id)) {
-      const badgeElement = createBadgeElement(badge, false);
-      badgesToEarnContainer.appendChild(badgeElement);
+      
+      // Add badges that can be earned
+      Object.values(allBadges).forEach(badge => {
+        if (!earnedBadges || !earnedBadges.includes(badge.id)) {
+          // Calculate progress percentage
+          const progress = badgeProgress[badge.type] || 0;
+          const progressPercent = Math.min(100, Math.round((progress / badge.requirement) * 100));
+          
+          const badgeElement = createBadgeElement(badge, false, progressPercent, null, progress);
+          badgesToEarnContainer.appendChild(badgeElement);
+        }
+      });
     }
   });
 }
 
 // Create a badge element for display
-function createBadgeElement(badge, earned) {
+function createBadgeElement(badge, earned, progressPercent, earnedDate, currentProgress) {
   const badgeElement = document.createElement('div');
   badgeElement.className = earned ? 'badge-item earned' : 'badge-item';
   
@@ -492,6 +598,36 @@ function createBadgeElement(badge, earned) {
   badgeElement.appendChild(iconElement);
   badgeElement.appendChild(nameElement);
   badgeElement.appendChild(descElement);
+  
+  // Add progress bar for unearned badges
+  if (!earned) {
+    const progressText = document.createElement('div');
+    progressText.className = 'badge-progress-text';
+    progressText.textContent = `Progress: ${currentProgress || 0}/${badge.requirement} (${progressPercent}%)`;
+    
+    const progressContainer = document.createElement('div');
+    progressContainer.className = 'badge-progress';
+    
+    const progressBar = document.createElement('div');
+    progressBar.className = 'badge-progress-bar';
+    progressBar.style.width = `${progressPercent}%`;
+    
+    progressContainer.appendChild(progressBar);
+    
+    badgeElement.appendChild(progressText);
+    badgeElement.appendChild(progressContainer);
+  } else if (earnedDate) {
+    // Add earned date for earned badges
+    const earnedDateElement = document.createElement('div');
+    earnedDateElement.className = 'badge-earned-date';
+    
+    // Format the date nicely
+    const dateObj = new Date(earnedDate);
+    const formattedDate = dateObj.toLocaleDateString();
+    
+    earnedDateElement.textContent = `Earned on: ${formattedDate}`;
+    badgeElement.appendChild(earnedDateElement);
+  }
   
   return badgeElement;
 }
@@ -725,8 +861,16 @@ function sendAnalyzeRequest(tab) {
           response.hashtagInsights,
           response.languagePatterns,
           response.passiveVoiceExamples,
-          response.googleFactResponse
+          response.googleFactResponse,
+          response.sourceCredibilityScore,
+          response.sourceDetails
         );
+        
+        // Show the ongoing analysis indicator
+        const ongoingAnalysisIndicator = document.getElementById('ongoing-analysis-indicator');
+        if (ongoingAnalysisIndicator) {
+          ongoingAnalysisIndicator.style.display = 'flex';
+        }
         
         // Set up event listeners for the action buttons
         setupActionButtons(tab, response);
@@ -842,6 +986,146 @@ function initializeTabs() {
   challengesTab.addEventListener('click', () => switchTab(challengesTab));
   leaderboardTab.addEventListener('click', () => switchTab(leaderboardTab));
 }
+
+// Listen for messages from background
+chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
+  if (message.action === "pointsUpdated") {
+    // Update the points display
+    if (userPointsElement) {
+      userPointsElement.textContent = message.totalPoints;
+    }
+    
+    // Show notification if there are points awarded
+    if (message.pointsAwarded && message.pointsAwarded > 0) {
+      // Format a nice message for the notification
+      let pointsMessage = `+${message.pointsAwarded} points`;
+      if (message.reason) {
+        switch (message.reason) {
+          case 'BOT_DETECTED':
+            pointsMessage += ' for bot detection!';
+            break;
+          case 'MISINFO_FLAGGED':
+            pointsMessage += ' for identifying misinformation!';
+            break;
+          case 'SOURCE_VALIDATED':
+            pointsMessage += ' for validating sources!';
+            break;
+          case 'PASSIVE_VOICE_DETECTED':
+            pointsMessage += ' for passive voice detection!';
+            break;
+          case 'LOW_CREDIBILITY_SOURCE_IDENTIFIED':
+            pointsMessage += ' for identifying low credibility sources!';
+            break;
+          case 'REPORT_SUBMITTED':
+            pointsMessage += ' for submitting a report!';
+            break;
+          case 'CHALLENGE_COMPLETED':
+            pointsMessage += ' for completing a challenge!';
+            break;
+          case 'BADGE_EARNED':
+            pointsMessage += ' for earning a badge!';
+            break;
+          default:
+            pointsMessage += '!';
+        }
+      }
+      
+      // Show the notification
+      rewardsBox.style.display = 'block';
+      document.getElementById('reward-details').textContent = pointsMessage;
+      
+      // Hide after 3 seconds
+      setTimeout(() => {
+        rewardsBox.style.display = 'none';
+      }, 3000);
+    }
+  } else if (message.action === "levelUp") {
+    // Update level display
+    if (userLevelElement) {
+      userLevelElement.textContent = message.title;
+    }
+    
+    // Show level up notification
+    rewardsBox.style.display = 'block';
+    document.getElementById('reward-details').textContent = `Level Up! You're now a ${message.title}!`;
+    
+    // Hide after 5 seconds (longer for level up)
+    setTimeout(() => {
+      rewardsBox.style.display = 'none';
+    }, 5000);
+  } else if (message.action === "badgeEarned") {
+    // Handle badge earned notification
+    const badge = message.badge;
+    
+    // If we're on the badges tab, refresh the badge display
+    if (badgesContent.classList.contains('active')) {
+      loadBadges();
+    }
+    
+    // Show badge earned notification
+    rewardsBox.style.display = 'block';
+    
+    // Create a more elaborate rewards notification
+    const rewardDetails = document.getElementById('reward-details');
+    rewardDetails.innerHTML = `
+      <div class="badge-earned-notification">
+        <div class="badge-icon-large">${badge.icon}</div>
+        <div class="badge-earned-text">
+          <div class="badge-title">New Badge Earned!</div>
+          <div class="badge-name">${badge.name}</div>
+          <div class="badge-desc">${badge.description}</div>
+        </div>
+      </div>
+    `;
+    
+    // Hide after 5 seconds
+    setTimeout(() => {
+      rewardsBox.style.display = 'none';
+    }, 5000);
+  } else if (message.action === "analysisUpdated") {
+    // Handle updated analysis results from content script
+    console.log("OctoPal: Received updated analysis from content script");
+    
+    // Only update if we're currently showing analysis results
+    if (analysisResults.style.display === 'block') {
+      // Show a brief notification that analysis has been updated
+      const analysisUpdateNotice = document.createElement('div');
+      analysisUpdateNotice.className = 'analysis-update-notice';
+      analysisUpdateNotice.textContent = '🔄 Analysis updated with new tweets';
+      
+      // Add the notice to the DOM
+      const mainContent = document.getElementById('main-content');
+      mainContent.appendChild(analysisUpdateNotice);
+      
+      // Remove the notice after 2 seconds
+      setTimeout(() => {
+        mainContent.removeChild(analysisUpdateNotice);
+      }, 2000);
+      
+      // Update the UI with the new results
+      if (message.results) {
+        updateUI(
+          message.results.botScore,
+          message.results.misinfoScore,
+          message.results.postingFrequencyScore,
+          message.results.hashtagPatternScore,
+          message.results.detectedPatterns,
+          message.results.accountAgeData,
+          message.results.hashtagInsights,
+          message.results.languagePatterns,
+          message.results.passiveVoiceExamples,
+          message.results.googleFactResponse,
+          message.results.sourceCredibilityScore,
+          message.results.sourceDetails
+        );
+      }
+    }
+    
+    // Always respond to let the content script know we received the message
+    sendResponse({ success: true });
+    return true;
+  }
+});
 
 // Initialize UI when popup is opened
 document.addEventListener('DOMContentLoaded', function() {

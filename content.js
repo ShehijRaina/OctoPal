@@ -10,6 +10,15 @@ const userAgeCache = new Map();
 // Cache for user hashtag patterns
 const userHashtagPatterns = new Map();
 
+// Track if analysis is in progress to prevent concurrent analysis
+let analysisInProgress = false;
+// Track the last analysis time to throttle frequent analyses
+let lastAnalysisTime = 0;
+// Scroll detection variables
+let lastScrollPosition = 0;
+let scrollTimeout = null;
+let tweetCountBeforeScroll = 0;
+
 // Listen for messages from the popup
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   // Add a ping handler to check if content script is loaded
@@ -51,6 +60,126 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     return true;
   }
 });
+
+// Set up scroll detection when the content script loads
+function setupScrollDetection() {
+  // Initialize tweet count
+  tweetCountBeforeScroll = countVisibleTweets();
+  lastScrollPosition = window.scrollY;
+  
+  // Add scroll event listener
+  window.addEventListener('scroll', handleScroll);
+  
+  console.log('OctoPal: Scroll detection initialized');
+}
+
+// Handle scroll events
+function handleScroll() {
+  // Clear existing timeout if any
+  if (scrollTimeout) {
+    clearTimeout(scrollTimeout);
+  }
+  
+  // Set a new timeout to detect when scrolling stops
+  scrollTimeout = setTimeout(() => {
+    // Check if we've scrolled enough to potentially load new content
+    const currentScrollPosition = window.scrollY;
+    const scrollDistance = Math.abs(currentScrollPosition - lastScrollPosition);
+    
+    // Only check for new tweets if we've scrolled a significant amount
+    if (scrollDistance > 300) {
+      const currentTweetCount = countVisibleTweets();
+      
+      // If new tweets have been loaded
+      if (currentTweetCount > tweetCountBeforeScroll) {
+        console.log(`OctoPal: New tweets detected (${currentTweetCount - tweetCountBeforeScroll} new tweets)`);
+        
+        // Throttle analysis to prevent too frequent updates
+        const now = Date.now();
+        if (now - lastAnalysisTime > 3000) { // Don't analyze more than once every 3 seconds
+          lastAnalysisTime = now;
+          
+          // Perform a new analysis and send results to popup if open
+          performBackgroundAnalysis();
+        }
+        
+        // Update the baseline count
+        tweetCountBeforeScroll = currentTweetCount;
+      }
+      
+      // Update last scroll position
+      lastScrollPosition = currentScrollPosition;
+    }
+  }, 500); // Wait for 500ms after scrolling stops
+}
+
+// Count visible tweets on the page
+function countVisibleTweets() {
+  // Try multiple possible selectors for tweets
+  const possibleSelectors = [
+    '[data-testid="tweet"]',
+    '[data-testid="tweetText"]',
+    'article[role="article"]',
+    'div[data-testid="cellInnerDiv"]'
+  ];
+  
+  // Try each selector
+  for (const selector of possibleSelectors) {
+    const tweets = document.querySelectorAll(selector);
+    if (tweets && tweets.length > 0) {
+      return tweets.length;
+    }
+  }
+  
+  return 0;
+}
+
+// Perform analysis in the background and send results to popup if open
+function performBackgroundAnalysis() {
+  if (analysisInProgress) {
+    console.log('OctoPal: Analysis already in progress, skipping');
+    return;
+  }
+  
+  analysisInProgress = true;
+  console.log('OctoPal: Starting background analysis after scroll');
+  
+  analyzeCurrentPage()
+    .then(results => {
+      // Send results to popup if it's open
+      chrome.runtime.sendMessage({
+        action: "analysisUpdated",
+        results: {
+          botScore: results.botScore,
+          misinfoScore: results.misinfoScore,
+          postingFrequencyScore: results.postingFrequencyScore,
+          hashtagPatternScore: results.hashtagPatternScore,
+          detectedPatterns: results.detectedPatterns,
+          accountAgeData: results.accountAgeData,
+          hashtagInsights: results.hashtagInsights,
+          languagePatterns: results.languagePatterns,
+          passiveVoiceExamples: results.passiveVoiceExamples,
+          sourceCredibilityScore: results.sourceCredibilityScore,
+          sourceDetails: results.sourceDetails,
+          googleFactResponse: results.googleFactResponse
+        }
+      }, response => {
+        // Check if the popup is open and received the message
+        if (chrome.runtime.lastError) {
+          // Popup is not open or couldn't receive the message - that's okay
+          console.log('OctoPal: Popup not available to receive analysis update');
+        } else if (response && response.success) {
+          console.log('OctoPal: Analysis results sent to popup');
+        }
+      });
+    })
+    .catch(error => {
+      console.error('OctoPal: Error during background analysis', error);
+    })
+    .finally(() => {
+      analysisInProgress = false;
+    });
+}
 
 // Analyze the current Twitter page
 async function analyzeCurrentPage() {
@@ -1458,4 +1587,10 @@ function analyzeSourcesInTweet(tweetElement) {
     credibilityScore,
     sourceDetails
   };
-} 
+}
+
+// Initialize scroll detection when the page is fully loaded
+window.addEventListener('load', () => {
+  // Give the page a moment to fully render
+  setTimeout(setupScrollDetection, 1000);
+}); 
